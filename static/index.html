@@ -281,23 +281,12 @@
 
             <div class="result-card" style="border: 1px solid rgba(34, 197, 94, 0.3);">
                 <h3>🎤 Karaoke Track (Instrumental Only)</h3>
-                <audio id="karaokeAudio" controls></audio>
+                <audio id="karaokeAudio" controls preload="auto"></audio>
                 <div style="display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap;">
                     <a id="downloadKaraoke" class="download-btn primary" download>
                         ⬇️ Download Karaoke MP3
                     </a>
-                    <button onclick="document.getElementById('startRecordBtn').click();" class="download-btn" style="background: #ef4444; color: white; border: none; cursor: pointer;">
-                        🎙️ Sing & Record Mic Now
-                    </button>
                 </div>
-            </div>
-
-            <div class="result-card">
-                <h3>🗣️ Isolated Vocals Track</h3>
-                <audio id="vocalsAudio" controls></audio>
-                <a id="downloadVocals" class="download-btn" download>
-                    ⬇️ Download Vocals MP3
-                </a>
             </div>
         </div>
 
@@ -489,18 +478,13 @@
                     }
                 };
 
-                // Play karaoke instrumental track from start and record microphone
-                karaokeAudio.currentTime = 0;
-                const playPromise = karaokeAudio.play();
-                if (playPromise !== undefined) {
-                    playPromise.then(() => {
-                        console.log("Karaoke audio playback started automatically for singing!");
-                    }).catch(error => {
-                        console.warn("Autoplay error:", error);
-                        // Force play if blocked
-                        karaokeAudio.play();
-                    });
+                // Ensure audio is fully loaded before playing
+                if (karaokeAudio.readyState < 2) {
+                    karaokeAudio.load();
                 }
+                
+                karaokeAudio.currentTime = 0;
+                await karaokeAudio.play().catch(e => console.warn("Playback error:", e));
                 
                 mediaRecorder.start();
 
