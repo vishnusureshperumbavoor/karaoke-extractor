@@ -264,9 +264,9 @@
                 </div>
                 <p style="color: var(--text-sub); font-size: 0.9rem; margin-bottom: 12px;">Sing along using your device microphone while playing the instrumental backing track!</p>
 
-                <div style="display: flex; gap: 12px; margin-bottom: 14px;">
-                    <button id="startRecordBtn" class="download-btn primary" style="background: #ef4444; border: none; cursor: pointer;">🔴 Start Recording</button>
-                    <button id="stopRecordBtn" class="download-btn" style="border: none; cursor: pointer;" disabled>⏹️ Stop & Mix</button>
+                <div style="display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
+                    <button id="toggleRecordBtn" class="download-btn primary" style="background: #22c55e; border: none; cursor: pointer;">🎙️ Start Recording</button>
+                    <button id="cancelRecordBtn" class="download-btn" style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; cursor: pointer; display: none;">❌ Cancel</button>
                 </div>
 
                 <div id="recordingStatus" style="font-size: 0.9rem; color: #38bdf8; display: none; margin-bottom: 8px;">
@@ -428,35 +428,54 @@
         let currentJobId = null;
         let mediaRecorder = null;
         let audioChunks = [];
+        let isCancelled = false;
 
-        const startRecordBtn = document.getElementById('startRecordBtn');
-        const stopRecordBtn = document.getElementById('stopRecordBtn');
+        const toggleRecordBtn = document.getElementById('toggleRecordBtn');
+        const cancelRecordBtn = document.getElementById('cancelRecordBtn');
         const recordingStatus = document.getElementById('recordingStatus');
         const mixingSection = document.getElementById('mixingSection');
         const mixedAudio = document.getElementById('mixedAudio');
         const downloadMixed = document.getElementById('downloadMixed');
 
-        startRecordBtn.addEventListener('click', async () => {
+        toggleRecordBtn.addEventListener('click', async () => {
             if (!currentJobId) {
-                alert("Please extract a karaoke track first!");
+                alert("Please select or extract a karaoke track first!");
                 return;
             }
 
+            // IF ALREADY RECORDING -> STOP & MIX
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                isCancelled = false;
+                mediaRecorder.stop();
+                if (mediaRecorder.stream) {
+                    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                }
+                resetRecordButtonState();
+                return;
+            }
+
+            // START RECORDING
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
+                isCancelled = false;
 
                 mediaRecorder.ondataavailable = (e) => {
                     if (e.data.size > 0) audioChunks.push(e.data);
                 };
 
                 mediaRecorder.onstop = async () => {
+                    karaokeAudio.pause();
+                    
+                    if (isCancelled) {
+                        recordingStatus.style.display = 'none';
+                        resetRecordButtonState();
+                        return;
+                    }
+
                     const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                     recordingStatus.textContent = '⏳ Mixing your voice with the Karaoke track... Please wait!';
-                    
-                    // Stop playing karaoke
-                    karaokeAudio.pause();
 
                     const formData = new FormData();
                     formData.append('job_id', currentJobId);
@@ -478,18 +497,19 @@
                     } catch (err) {
                         alert("Error mixing audio: " + err.message);
                         recordingStatus.style.display = 'none';
+                    } finally {
+                        resetRecordButtonState();
                     }
                 };
 
-                // Pre-buffer audio completely into memory if not already buffered
+                // Pre-buffer audio completely into memory if needed
                 if (!karaokeAudio.src || karaokeAudio.src.startsWith('http')) {
                     recordingStatus.style.display = 'block';
-                    recordingStatus.textContent = '⏳ Pre-buffering audio track into memory for smooth playback...';
+                    recordingStatus.textContent = '⏳ Loading track into memory...';
                     
                     const response = await fetch(downloadKaraoke.href);
                     const blob = await response.blob();
-                    const localBlobUrl = URL.createObjectURL(blob);
-                    karaokeAudio.src = localBlobUrl;
+                    karaokeAudio.src = URL.createObjectURL(blob);
                 }
 
                 karaokeAudio.currentTime = 0;
@@ -497,26 +517,39 @@
                 
                 mediaRecorder.start();
 
-                startRecordBtn.disabled = true;
-                stopRecordBtn.disabled = false;
+                // Update UI state for recording mode
+                toggleRecordBtn.textContent = '⏹️ Stop & Mix';
+                toggleRecordBtn.style.background = '#ef4444';
+                cancelRecordBtn.style.display = 'inline-flex';
+                
                 recordingStatus.style.display = 'block';
                 recordingStatus.textContent = '⏺️ Karaoke playing & Microphone recording... Sing now!';
 
             } catch (err) {
                 alert("Microphone access denied or unavailable: " + err.message);
+                resetRecordButtonState();
             }
         });
 
-        stopRecordBtn.addEventListener('click', () => {
+        cancelRecordBtn.addEventListener('click', () => {
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                isCancelled = true;
                 mediaRecorder.stop();
-                // Stop mic track
-                mediaRecorder.stream.getTracks().forEach(track => track.stop());
-                
-                startRecordBtn.disabled = false;
-                stopRecordBtn.disabled = true;
+                if (mediaRecorder.stream) {
+                    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                }
+                karaokeAudio.pause();
+                karaokeAudio.currentTime = 0;
             }
+            resetRecordButtonState();
+            recordingStatus.style.display = 'none';
         });
+
+        function resetRecordButtonState() {
+            toggleRecordBtn.textContent = '🎙️ Start Recording';
+            toggleRecordBtn.style.background = '#22c55e';
+            cancelRecordBtn.style.display = 'none';
+        }
 
         // Gallery Fetch & Select Logic
         const galleryContainer = document.getElementById('galleryContainer');
