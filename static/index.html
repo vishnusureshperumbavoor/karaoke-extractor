@@ -543,7 +543,6 @@
                             <button class="download-btn primary" onclick="selectTrackForKaraoke('${item.job_id}', '${escapeHtml(item.song_name)}', '${item.karaoke_url}', '${item.vocals_url}')" style="border: none; cursor: pointer; text-align: center; justify-content: center;">
                                 🎙️ Select & Sing With Track
                             </button>
-                            ${item.has_mixed ? `<a href="${item.mixed_url}" download class="download-btn" style="text-align: center; justify-content: center; font-size: 0.85rem; color: #4ade80; border-color: #22c55e;">⬇️ Download Last Voice Recording</a>` : ''}
                         </div>
                     `;
                     galleryContainer.appendChild(card);
