@@ -257,6 +257,28 @@
         </div>
 
         <div class="result-section" id="resultSection">
+            <div class="result-card" style="border: 1px solid rgba(168, 85, 247, 0.4); background: rgba(88, 28, 135, 0.2);">
+                <h3 style="color: #c084fc;">🎙️ Karaoke Recording Studio</h3>
+                <p style="color: var(--text-sub); font-size: 0.9rem; margin-bottom: 12px;">Sing along using your device microphone while playing the instrumental backing track!</p>
+
+                <div style="display: flex; gap: 12px; margin-bottom: 14px;">
+                    <button id="startRecordBtn" class="download-btn primary" style="background: #ef4444; border: none; cursor: pointer;">🔴 Start Recording</button>
+                    <button id="stopRecordBtn" class="download-btn" style="border: none; cursor: pointer;" disabled>⏹️ Stop & Mix</button>
+                </div>
+
+                <div id="recordingStatus" style="font-size: 0.9rem; color: #38bdf8; display: none; margin-bottom: 8px;">
+                    ⏺️ Recording in progress... Sing into your microphone!
+                </div>
+
+                <div id="mixingSection" style="display: none; margin-top: 16px; border-top: 1px dashed var(--border-color); padding-top: 14px;">
+                    <h4 style="margin-bottom: 8px; font-size: 1rem; color: #f472b6;">🎉 Your Final Song (Your Voice + Karaoke)</h4>
+                    <audio id="mixedAudio" controls></audio>
+                    <a id="downloadMixed" class="download-btn primary" style="background: #22c55e; margin-top: 10px;" download>
+                        ⬇️ Download Final Song MP3
+                    </a>
+                </div>
+            </div>
+
             <div class="result-card">
                 <h3>🎤 Karaoke Track (Instrumental Only)</h3>
                 <audio id="karaokeAudio" controls></audio>
@@ -373,6 +395,9 @@
                     throw new Error(data.error || 'Failed to process audio file');
                 }
 
+                // Save current job_id
+                currentJobId = data.job_id;
+
                 // Set Audio previews & download links
                 karaokeAudio.src = data.karaoke_url;
                 vocalsAudio.src = data.vocals_url;
@@ -388,6 +413,89 @@
                 statusMsg.textContent = 'Error: ' + err.message;
             } finally {
                 processBtn.disabled = false;
+            }
+        });
+
+        // Microphone Recording & Audio Mixing Logic
+        let currentJobId = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+
+        const startRecordBtn = document.getElementById('startRecordBtn');
+        const stopRecordBtn = document.getElementById('stopRecordBtn');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const mixingSection = document.getElementById('mixingSection');
+        const mixedAudio = document.getElementById('mixedAudio');
+        const downloadMixed = document.getElementById('downloadMixed');
+
+        startRecordBtn.addEventListener('click', async () => {
+            if (!currentJobId) {
+                alert("Please extract a karaoke track first!");
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) audioChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    recordingStatus.textContent = '⏳ Mixing your voice with the Karaoke track... Please wait!';
+                    
+                    // Stop playing karaoke
+                    karaokeAudio.pause();
+
+                    const formData = new FormData();
+                    formData.append('job_id', currentJobId);
+                    formData.append('user_voice', audioBlob, 'user_recording.webm');
+
+                    try {
+                        const mixRes = await fetch('/api/mix', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const mixData = await mixRes.json();
+
+                        if (!mixRes.ok) throw new Error(mixData.error || 'Failed to mix audio');
+
+                        mixedAudio.src = mixData.mixed_url;
+                        downloadMixed.href = mixData.mixed_url;
+                        mixingSection.style.display = 'block';
+                        recordingStatus.style.display = 'none';
+                    } catch (err) {
+                        alert("Error mixing audio: " + err.message);
+                        recordingStatus.style.display = 'none';
+                    }
+                };
+
+                // Play karaoke instrumental track from start and record microphone
+                karaokeAudio.currentTime = 0;
+                karaokeAudio.play();
+                mediaRecorder.start();
+
+                startRecordBtn.disabled = true;
+                stopRecordBtn.disabled = false;
+                recordingStatus.style.display = 'block';
+                recordingStatus.textContent = '⏺️ Recording in progress... Sing into your microphone!';
+
+            } catch (err) {
+                alert("Microphone access denied or unavailable: " + err.message);
+            }
+        });
+
+        stopRecordBtn.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                // Stop mic track
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                
+                startRecordBtn.disabled = false;
+                stopRecordBtn.disabled = true;
             }
         });
     </script>

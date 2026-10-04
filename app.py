@@ -69,11 +69,60 @@ def process_audio():
 
 @app.route("/api/download/<job_id>/<filename>")
 def download_file(job_id, filename):
-    if filename not in ["no_vocals.mp3", "vocals.mp3"]:
+    allowed_files = ["no_vocals.mp3", "vocals.mp3", "user_recording.webm", "final_song.mp3"]
+    if filename not in allowed_files:
         return jsonify({"error": "Invalid file request"}), 400
     
     file_path = os.path.join(PROCESSED_FOLDER, job_id, "htdemucs", "input")
-    return send_from_directory(file_path, filename, as_attachment=(filename == "no_vocals.mp3"))
+    if not os.path.exists(os.path.join(file_path, filename)):
+        # Check root job processed dir for mixed outputs
+        file_path = os.path.join(PROCESSED_FOLDER, job_id)
+
+    return send_from_directory(file_path, filename, as_attachment=True)
+
+@app.route("/api/mix", methods=["POST"])
+def mix_audio():
+    job_id = request.form.get("job_id")
+    vocal_volume = request.form.get("vocal_volume", "1.0")
+    music_volume = request.form.get("music_volume", "1.0")
+
+    if not job_id or "user_voice" not in request.files:
+        return jsonify({"error": "Missing job_id or voice recording file"}), 400
+
+    job_dir = os.path.join(PROCESSED_FOLDER, job_id)
+    karaoke_path = os.path.join(job_dir, "htdemucs", "input", "no_vocals.mp3")
+
+    if not os.path.exists(karaoke_path):
+        return jsonify({"error": "Karaoke track not found for job"}), 404
+
+    voice_file = request.files["user_voice"]
+    voice_path = os.path.join(job_dir, "user_recording.webm")
+    voice_file.save(voice_path)
+
+    output_mixed_path = os.path.join(job_dir, "final_song.mp3")
+
+    # Use ffmpeg to mix microphone recording with backing track
+    ffmpeg_cmd = [
+        "ffmpeg", "-y",
+        "-i", karaoke_path,
+        "-i", voice_path,
+        "-filter_complex",
+        f"[0:a]volume={music_volume}[a0];[1:a]volume={vocal_volume}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[out]",
+        "-map", "[out]",
+        "-b:a", "192k",
+        output_mixed_path
+    ]
+
+    try:
+        subprocess.run(ffmpeg_cmd, capture_output=True, text=True, check=True)
+        return jsonify({
+            "success": True,
+            "mixed_url": f"/api/download/{job_id}/final_song.mp3",
+            "message": "Recorded voice & karaoke mixed successfully!"
+        })
+    except subprocess.CalledProcessError as e:
+        print("FFmpeg mixing error:", e.stderr)
+        return jsonify({"error": "Audio mixing failed", "details": e.stderr}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
