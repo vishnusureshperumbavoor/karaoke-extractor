@@ -540,7 +540,7 @@
                             <p style="color: var(--text-sub); font-size: 0.8rem; margin-bottom: 12px;">ID: ${item.job_id.substring(0, 8)}</p>
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <button class="download-btn primary" onclick="selectTrackForKaraoke('${item.job_id}', '${escapeHtml(item.song_name)}', '${item.karaoke_url}', '${item.vocals_url}')" style="border: none; cursor: pointer; text-align: center; justify-content: center;">
+                            <button class="download-btn primary" onclick="selectTrackForKaraoke('${item.job_id}', '${escapeHtml(item.song_name)}', '${item.karaoke_url}')" style="border: none; cursor: pointer; text-align: center; justify-content: center;">
                                 🎙️ Select & Sing With Track
                             </button>
                         </div>
@@ -556,12 +556,10 @@
             return text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
         }
 
-        window.selectTrackForKaraoke = function(jobId, songName, karaokeUrl, vocalsUrl) {
+        window.selectTrackForKaraoke = function(jobId, songName, karaokeUrl) {
             currentJobId = jobId;
             karaokeAudio.src = karaokeUrl;
-            vocalsAudio.src = vocalsUrl;
             downloadKaraoke.href = karaokeUrl;
-            downloadVocals.href = vocalsUrl;
 
             // Hide upload results if active
             resultSection.style.display = 'block';
