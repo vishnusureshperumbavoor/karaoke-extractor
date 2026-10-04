@@ -481,11 +481,17 @@
                     }
                 };
 
-                // Ensure audio is fully loaded before playing
-                if (karaokeAudio.readyState < 2) {
-                    karaokeAudio.load();
+                // Pre-buffer audio completely into memory if not already buffered
+                if (!karaokeAudio.src || karaokeAudio.src.startsWith('http')) {
+                    recordingStatus.style.display = 'block';
+                    recordingStatus.textContent = '⏳ Pre-buffering audio track into memory for smooth playback...';
+                    
+                    const response = await fetch(downloadKaraoke.href);
+                    const blob = await response.blob();
+                    const localBlobUrl = URL.createObjectURL(blob);
+                    karaokeAudio.src = localBlobUrl;
                 }
-                
+
                 karaokeAudio.currentTime = 0;
                 await karaokeAudio.play().catch(e => console.warn("Playback error:", e));
                 
@@ -564,9 +570,8 @@
         const headerContainer = document.querySelector('.header');
         const backToGalleryBtn = document.getElementById('backToGalleryBtn');
 
-        window.selectTrackForKaraoke = function(jobId, songName, karaokeUrl) {
+        window.selectTrackForKaraoke = async function(jobId, songName, karaokeUrl) {
             currentJobId = jobId;
-            karaokeAudio.src = karaokeUrl;
             downloadKaraoke.href = karaokeUrl;
 
             // Show Studio view, hide Upload box & Gallery list for zero distraction
@@ -575,10 +580,22 @@
             dropZone.style.display = 'none';
             processBtn.style.display = 'none';
             mixingSection.style.display = 'none';
-            statusMsg.textContent = '';
+            statusMsg.textContent = '⏳ Loading song into memory...';
 
             // Scroll smoothly to Singer Studio card
             resultSection.scrollIntoView({ behavior: 'smooth' });
+
+            try {
+                // Fetch 100% of MP3 into browser RAM before playing
+                const response = await fetch(karaokeUrl);
+                const blob = await response.blob();
+                karaokeAudio.src = URL.createObjectURL(blob);
+                statusMsg.textContent = '';
+            } catch (e) {
+                console.warn("Pre-buffering warning:", e);
+                karaokeAudio.src = karaokeUrl;
+                statusMsg.textContent = '';
+            }
         };
 
         backToGalleryBtn.addEventListener('click', () => {
