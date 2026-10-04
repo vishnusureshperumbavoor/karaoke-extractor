@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Karaoke & Instrumental Extractor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --accent-glow: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(99, 102, 241, 0.25) 0px, transparent 50%),
+                radial-gradient(at 90% 80%, rgba(236, 72, 153, 0.25) 0px, transparent 50%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-main);
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 650px;
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--text-sub);
+            font-size: 1rem;
+        }
+
+        .upload-box {
+            border: 2px dashed rgba(168, 85, 247, 0.4);
+            border-radius: 16px;
+            padding: 40px 20px;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.4);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .upload-box:hover, .upload-box.dragover {
+            border-color: #a855f7;
+            background: rgba(168, 85, 247, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .upload-box input[type="file"] {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .file-info {
+            margin-top: 12px;
+            font-size: 0.95rem;
+            color: #e2e8f0;
+            word-break: break-all;
+        }
+
+        .btn-action {
+            width: 100%;
+            margin-top: 24px;
+            padding: 16px;
+            border: none;
+            border-radius: 14px;
+            background: var(--accent-gradient);
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            box-shadow: 0 10px 25px -5px rgba(168, 85, 247, 0.4);
+        }
+
+        .btn-action:hover {
+            opacity: 0.95;
+            transform: translateY(-1px);
+        }
+
+        .btn-action:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Processing State */
+        .progress-section {
+            display: none;
+            text-align: center;
+            margin-top: 24px;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: #a855f7;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Result Section */
+        .result-section {
+            display: none;
+            margin-top: 32px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 24px;
+        }
+
+        .result-card {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .result-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 8px;
+            outline: none;
+            filter: invert(0.9) hue-rotate(180deg);
+            border-radius: 8px;
+        }
+
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            padding: 10px 18px;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            text-decoration: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .download-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .download-btn.primary {
+            background: #8b5cf6;
+            color: white;
+        }
+
+        .download-btn.primary:hover {
+            background: #7c3aed;
+        }
+
+        .status-msg {
+            color: #ef4444;
+            text-align: center;
+            margin-top: 16px;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <h1>Karaoke Extractor AI</h1>
+            <p>Upload any MP3 song to isolate vocals and extract pure Instrumental/Karaoke audio</p>
+        </div>
+
+        <div class="upload-box" id="dropZone">
+            <input type="file" id="audioInput" accept="audio/*, .mp3, .wav, .m4a" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 10;">
+            
+            <div id="uploadPrompt">
+                <span class="upload-icon">🎵</span>
+                <h3>Choose an MP3 audio file</h3>
+                <p style="color: var(--text-sub); font-size: 0.9rem; margin-top: 6px;">or drag and drop it here</p>
+            </div>
+
+            <div id="selectedState" style="display: none;">
+                <span class="upload-icon" style="color: #22c55e;">✅</span>
+                <h3 id="selectedFileName" style="color: #4ade80; word-break: break-all;"></h3>
+                <p id="selectedFileSize" style="color: var(--text-sub); font-size: 0.9rem; margin-top: 4px;"></p>
+                <span style="display: inline-block; margin-top: 10px; font-size: 0.85rem; color: #a855f7; text-decoration: underline;">Click or drop another file to change</span>
+            </div>
+        </div>
+
+        <button class="btn-action" id="processBtn" disabled>Extract Karaoke Track</button>
+        <div class="status-msg" id="statusMsg"></div>
+
+        <div class="progress-section" id="progressSection">
+            <div class="spinner"></div>
+            <p id="progressText">Extracting Karaoke Track with Deep Learning AI...</p>
+            <p style="color: var(--text-sub); font-size: 0.85rem; margin-top: 6px;">This takes around 15–30 seconds depending on song length.</p>
+        </div>
+
+        <div class="result-section" id="resultSection">
+            <div class="result-card">
+                <h3>🎤 Karaoke Track (Instrumental Only)</h3>
+                <audio id="karaokeAudio" controls></audio>
+                <a id="downloadKaraoke" class="download-btn primary" download>
+                    ⬇️ Download Karaoke MP3
+                </a>
+            </div>
+
+            <div class="result-card">
+                <h3>🗣️ Isolated Vocals Track</h3>
+                <audio id="vocalsAudio" controls></audio>
+                <a id="downloadVocals" class="download-btn" download>
+                    ⬇️ Download Vocals MP3
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const audioInput = document.getElementById('audioInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const processBtn = document.getElementById('processBtn');
+        const progressSection = document.getElementById('progressSection');
+        const resultSection = document.getElementById('resultSection');
+        const statusMsg = document.getElementById('statusMsg');
+        
+        const karaokeAudio = document.getElementById('karaokeAudio');
+        const vocalsAudio = document.getElementById('vocalsAudio');
+        const downloadKaraoke = document.getElementById('downloadKaraoke');
+        const downloadVocals = document.getElementById('downloadVocals');
+
+        const dropZone = document.getElementById('dropZone');
+        const uploadPrompt = document.getElementById('uploadPrompt');
+        const selectedState = document.getElementById('selectedState');
+        const selectedFileName = document.getElementById('selectedFileName');
+        const selectedFileSize = document.getElementById('selectedFileSize');
+
+        let selectedFile = null;
+
+        function handleFileSelect(file) {
+            console.log("File selected:", file);
+            if (!file) return;
+            selectedFile = file;
+            
+            // Toggle visual state
+            uploadPrompt.style.display = 'none';
+            selectedState.style.display = 'block';
+            
+            selectedFileName.textContent = file.name;
+            selectedFileSize.textContent = `Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+
+            processBtn.disabled = false;
+            statusMsg.textContent = '';
+        }
+
+        audioInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        // Drag and Drop support
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('dragover');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files && files.length > 0) {
+                audioInput.files = files;
+                handleFileSelect(files[0]);
+            }
+        });
+
+        processBtn.addEventListener('click', async () => {
+            console.log("Process button clicked. Sending file to /api/process...");
+            if (!selectedFile) {
+                alert("Please select an audio file first!");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            // Reset view UI
+            processBtn.disabled = true;
+            progressSection.style.display = 'block';
+            resultSection.style.display = 'none';
+            statusMsg.textContent = '';
+
+            try {
+                const response = await fetch('/api/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                console.log("API response received:", data);
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to process audio file');
+                }
+
+                // Set Audio previews & download links
+                karaokeAudio.src = data.karaoke_url;
+                vocalsAudio.src = data.vocals_url;
+
+                downloadKaraoke.href = data.karaoke_url;
+                downloadVocals.href = data.vocals_url;
+
+                progressSection.style.display = 'none';
+                resultSection.style.display = 'block';
+            } catch (err) {
+                console.error("Error processing file:", err);
+                progressSection.style.display = 'none';
+                statusMsg.textContent = 'Error: ' + err.message;
+            } finally {
+                processBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
