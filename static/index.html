@@ -491,13 +491,23 @@
 
                 // Play karaoke instrumental track from start and record microphone
                 karaokeAudio.currentTime = 0;
-                karaokeAudio.play();
+                const playPromise = karaokeAudio.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        console.log("Karaoke audio playback started automatically for singing!");
+                    }).catch(error => {
+                        console.warn("Autoplay error:", error);
+                        // Force play if blocked
+                        karaokeAudio.play();
+                    });
+                }
+                
                 mediaRecorder.start();
 
                 startRecordBtn.disabled = true;
                 stopRecordBtn.disabled = false;
                 recordingStatus.style.display = 'block';
-                recordingStatus.textContent = '⏺️ Recording in progress... Sing into your microphone!';
+                recordingStatus.textContent = '⏺️ Karaoke playing & Microphone recording... Sing now!';
 
             } catch (err) {
                 alert("Microphone access denied or unavailable: " + err.message);
