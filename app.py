@@ -37,6 +37,11 @@ def process_audio():
     out_dir = os.path.join(PROCESSED_FOLDER, job_id)
     os.makedirs(out_dir, exist_ok=True)
 
+    original_filename = file.filename
+    meta_path = os.path.join(out_dir, "metadata.txt")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        f.write(original_filename)
+
     # Run Demucs stem separation (htdemucs model isolates vocals and accompaniment)
     cmd = [
         os.path.abspath("./venv/bin/demucs"),
@@ -59,6 +64,7 @@ def process_audio():
 
         return jsonify({
             "job_id": job_id,
+            "filename": original_filename,
             "karaoke_url": f"/api/download/{job_id}/no_vocals.mp3",
             "vocals_url": f"/api/download/{job_id}/vocals.mp3",
             "message": "Karaoke track separated successfully!"
@@ -66,6 +72,32 @@ def process_audio():
     except subprocess.CalledProcessError as e:
         print("Demucs Error Output:", e.stderr)
         return jsonify({"error": "Demucs audio separation failed", "details": e.stderr}), 500
+
+@app.route("/api/gallery", methods=["GET"])
+def list_gallery():
+    gallery = []
+    if os.path.exists(PROCESSED_FOLDER):
+        for job_id in os.listdir(PROCESSED_FOLDER):
+            job_dir = os.path.join(PROCESSED_FOLDER, job_id)
+            karaoke_path = os.path.join(job_dir, "htdemucs", "input", "no_vocals.mp3")
+            if os.path.exists(karaoke_path):
+                meta_path = os.path.join(job_dir, "metadata.txt")
+                song_name = "Untitled Track"
+                if os.path.exists(meta_path):
+                    with open(meta_path, "r", encoding="utf-8") as f:
+                        song_name = f.read().strip()
+                
+                mixed_path = os.path.join(job_dir, "final_song.mp3")
+                gallery.append({
+                    "job_id": job_id,
+                    "song_name": song_name,
+                    "karaoke_url": f"/api/download/{job_id}/no_vocals.mp3",
+                    "vocals_url": f"/api/download/{job_id}/vocals.mp3",
+                    "has_mixed": os.path.exists(mixed_path),
+                    "mixed_url": f"/api/download/{job_id}/final_song.mp3" if os.path.exists(mixed_path) else None
+                })
+
+    return jsonify({"gallery": gallery})
 
 @app.route("/api/download/<job_id>/<filename>")
 def download_file(job_id, filename):

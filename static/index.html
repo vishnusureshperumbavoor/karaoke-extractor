@@ -293,6 +293,14 @@
                 <a id="downloadVocals" class="download-btn" download>
                     ⬇️ Download Vocals MP3
                 </a>
+        <div class="gallery-section" id="gallerySection" style="margin-top: 40px; border-top: 1px solid var(--border-color); padding-top: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h2 style="font-size: 1.4rem; color: #f8fafc; font-weight: 600;">📚 Extracted Karaoke Gallery</h2>
+                <button id="refreshGalleryBtn" style="background: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); color: #e2e8f0; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">🔄 Refresh</button>
+            </div>
+            
+            <div id="galleryContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+                <!-- Dynamically populated song cards -->
             </div>
         </div>
     </div>
@@ -498,6 +506,75 @@
                 stopRecordBtn.disabled = true;
             }
         });
+
+        // Gallery Fetch & Select Logic
+        const galleryContainer = document.getElementById('galleryContainer');
+        const refreshGalleryBtn = document.getElementById('refreshGalleryBtn');
+
+        async function loadGallery() {
+            try {
+                const res = await fetch('/api/gallery');
+                const data = await res.json();
+
+                if (!res.ok) return;
+
+                galleryContainer.innerHTML = '';
+                if (!data.gallery || data.gallery.length === 0) {
+                    galleryContainer.innerHTML = '<p style="color: var(--text-sub); grid-column: 1/-1; text-align: center;">No extracted karaoke songs yet. Upload your first MP3 above!</p>';
+                    return;
+                }
+
+                data.gallery.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'result-card';
+                    card.style.margin = '0';
+                    card.style.display = 'flex';
+                    card.style.flexDirection = 'column';
+                    card.style.justify = 'space-between';
+
+                    card.innerHTML = `
+                        <div>
+                            <h4 style="color: #a855f7; font-size: 1rem; margin-bottom: 6px; word-break: break-all;">🎵 ${escapeHtml(item.song_name)}</h4>
+                            <p style="color: var(--text-sub); font-size: 0.8rem; margin-bottom: 12px;">ID: ${item.job_id.substring(0, 8)}</p>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <button class="download-btn primary" onclick="selectTrackForKaraoke('${item.job_id}', '${escapeHtml(item.song_name)}', '${item.karaoke_url}', '${item.vocals_url}')" style="border: none; cursor: pointer; text-align: center; justify-content: center;">
+                                🎙️ Select & Sing With Track
+                            </button>
+                            ${item.has_mixed ? `<a href="${item.mixed_url}" download class="download-btn" style="text-align: center; justify-content: center; font-size: 0.85rem; color: #4ade80; border-color: #22c55e;">⬇️ Download Last Voice Recording</a>` : ''}
+                        </div>
+                    `;
+                    galleryContainer.appendChild(card);
+                });
+            } catch (err) {
+                console.error("Failed to load gallery:", err);
+            }
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        window.selectTrackForKaraoke = function(jobId, songName, karaokeUrl, vocalsUrl) {
+            currentJobId = jobId;
+            karaokeAudio.src = karaokeUrl;
+            vocalsAudio.src = vocalsUrl;
+            downloadKaraoke.href = karaokeUrl;
+            downloadVocals.href = vocalsUrl;
+
+            // Hide upload results if active
+            resultSection.style.display = 'block';
+            mixingSection.style.display = 'none';
+            statusMsg.textContent = '';
+
+            // Scroll smoothly to Singer Studio card
+            resultSection.scrollIntoView({ behavior: 'smooth' });
+        };
+
+        refreshGalleryBtn.addEventListener('click', loadGallery);
+
+        // Load gallery on page init
+        loadGallery();
     </script>
 </body>
 </html>
