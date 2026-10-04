@@ -66,17 +66,17 @@ Start the Flask application server:
 
 The server will start running on port `5000`:
 - **Local machine access**: `http://localhost:5000`
-- **Mobile Wi-Fi access**: `http://<YOUR_LOCAL_IP>:5000` (e.g. `http://192.168.29.106:5000`)
+- **Mobile Wi-Fi access**: `http://<YOUR_LOCAL_IP>:5000` (e.g. `http://192.168.x.x:5000`)
 
 ---
 
 ## 📱 Mobile Microphone Setup (Android Chrome)
 
-To record your voice over local Wi-Fi (`http://192.168.29.106:5000`), enable insecure origins in Chrome:
+To record your voice over local Wi-Fi (`http://<YOUR_LOCAL_IP>:5000`), enable insecure origins in Chrome:
 
 1. Open Chrome on Android and go to `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
 2. Search for **"Insecure origins treated as secure"**.
-3. Add your local URL: `http://192.168.29.106:5000`.
+3. Add your local URL: `http://<YOUR_LOCAL_IP>:5000`.
 4. Change the dropdown to **Enabled** and tap **Relaunch**.
 
 ---
