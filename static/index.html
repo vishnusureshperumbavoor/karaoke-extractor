@@ -258,7 +258,10 @@
 
         <div class="result-section" id="resultSection">
             <div class="result-card" style="border: 1px solid rgba(168, 85, 247, 0.4); background: rgba(88, 28, 135, 0.2);">
-                <h3 style="color: #c084fc;">🎙️ Karaoke Recording Studio</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                    <h3 style="color: #c084fc; margin-bottom: 0;">🎙️ Karaoke Recording Studio</h3>
+                    <button id="backToGalleryBtn" style="background: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); color: #cbd5e1; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">← Back to Gallery</button>
+                </div>
                 <p style="color: var(--text-sub); font-size: 0.9rem; margin-bottom: 12px;">Sing along using your device microphone while playing the instrumental backing track!</p>
 
                 <div style="display: flex; gap: 12px; margin-bottom: 14px;">
@@ -552,23 +555,39 @@
             }
         }
 
-        function escapeHtml(text) {
-            return text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        }
+        const gallerySection = document.getElementById('gallerySection');
+        const dropZone = document.getElementById('dropZone');
+        const headerContainer = document.querySelector('.header');
+        const backToGalleryBtn = document.getElementById('backToGalleryBtn');
 
         window.selectTrackForKaraoke = function(jobId, songName, karaokeUrl) {
             currentJobId = jobId;
             karaokeAudio.src = karaokeUrl;
             downloadKaraoke.href = karaokeUrl;
 
-            // Hide upload results if active
+            // Show Studio view, hide Upload box & Gallery list for zero distraction
             resultSection.style.display = 'block';
+            gallerySection.style.display = 'none';
+            dropZone.style.display = 'none';
+            processBtn.style.display = 'none';
             mixingSection.style.display = 'none';
             statusMsg.textContent = '';
 
             // Scroll smoothly to Singer Studio card
             resultSection.scrollIntoView({ behavior: 'smooth' });
         };
+
+        backToGalleryBtn.addEventListener('click', () => {
+            // Stop audio if playing
+            karaokeAudio.pause();
+            
+            // Return to main gallery & upload view
+            resultSection.style.display = 'none';
+            gallerySection.style.display = 'block';
+            dropZone.style.display = 'block';
+            processBtn.style.display = 'block';
+            loadGallery();
+        });
 
         refreshGalleryBtn.addEventListener('click', loadGallery);
 
