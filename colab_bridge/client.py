@@ -413,22 +413,26 @@ class ColabMCPClient:
         self.log(f"Uploading {os.path.basename(local_path)} ({len(raw_bytes)/1024:.1f} KB) to Colab {remote_path} in {len(chunks)} chunk(s)...")
 
         tmp_b64 = f"{remote_path}.b64"
+        remote_dir = os.path.dirname(remote_path) or "/content"
         for idx, chunk in enumerate(chunks):
             mode = "w" if idx == 0 else "a"
             is_last = idx == len(chunks) - 1
-            code = f"with open({tmp_b64!r}, {mode!r}) as f:\n    f.write({chunk!r})\n"
+            code = (
+                "import base64, os\n"
+                f"os.makedirs({remote_dir!r}, exist_ok=True)\n"
+                f"with open({tmp_b64!r}, {mode!r}) as f:\n"
+                f"    f.write({chunk!r})\n"
+            )
             if is_last:
                 code += (
-                    "import base64, os\n"
-                    f"os.makedirs(os.path.dirname({remote_path!r}) or '/content', exist_ok=True)\n"
                     f"with open({tmp_b64!r}, 'r') as f_in, open({remote_path!r}, 'wb') as f_out:\n"
                     "    f_out.write(base64.b64decode(f_in.read()))\n"
                     f"os.remove({tmp_b64!r})\n"
                     f"print('UPLOAD_OK:', os.path.getsize({remote_path!r}))\n"
                 )
             res = await self.execute_code(code, keep_cell=False)
-            if is_last and "UPLOAD_OK:" not in res.get("output", ""):
-                raise RuntimeError(f"Failed uploading {local_path} to Colab: {res.get('output')}")
+            if res.get("isError") or (is_last and "UPLOAD_OK:" not in res.get("output", "")):
+                raise RuntimeError(f"Failed uploading {local_path} (chunk {idx+1}/{len(chunks)}) to Colab: {res.get('output')}")
 
     async def download_file_from_colab(self, remote_path: str, local_path: str):
         """Downloads a binary file from Google Colab to local_path via chunked base64 slices."""
@@ -532,7 +536,7 @@ print('DEMUCS_COLAB_DONE')
         """Runs Seed-VC zero-shot singing voice conversion on Google Colab GPU (~10-15s on T4/L4)."""
         await self.ensure_connected()
 
-        # Compress source vocals and target voice ref into compact MP3s for 1-second upload
+        # Compress source vocals and target voice ref into compact MP3s for fast upload
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_v, \
              tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_r:
             compact_vocals = tmp_v.name
@@ -566,9 +570,9 @@ if not os.path.exists('/content/.seed_vc_deps_ready'):
     print('Installing Seed-VC lightweight dependencies on Colab...')
     subprocess.run([
         sys.executable, '-m', 'pip', 'install', '-q',
-        'munch', 'pyyaml', 'librosa', 'soundfile', 'huggingface_hub', 'transformers<5.0.0', 'accelerate'
+        'munch', 'einops', 'descript-audio-codec'
     ], check=True)
-    # Patch lazy imports & PyTorch 2.6 weights_only=False
+    # Patch lazy imports, PyTorch 2.6 weights_only=False, and transformers 5.x compatibility
     lr_path = '/content/seed-vc/modules/length_regulator.py'
     if os.path.exists(lr_path):
         code = open(lr_path).read()
@@ -582,6 +586,10 @@ if not os.path.exists('/content/.seed_vc_deps_ready'):
             c = open(p).read()
             c = c.replace('map_location="cpu")', 'map_location="cpu", weights_only=False)')
             c = c.replace("map_location='cpu')", "map_location='cpu', weights_only=False)")
+            c = c.replace(
+                "whisper_model._mask_input_features(\\n                ori_inputs.input_features, attention_mask=ori_inputs.attention_mask)",
+                "(whisper_model._mask_input_features(ori_inputs.input_features, attention_mask=ori_inputs.attention_mask) if hasattr(whisper_model, '_mask_input_features') else ori_inputs.input_features)"
+            )
             open(p, 'w').write(c)
     open('/content/.seed_vc_deps_ready', 'w').close()
 
@@ -603,6 +611,7 @@ cmd = [
 print('Running Seed-VC on Colab GPU:', ' '.join(cmd))
 proc = subprocess.run(cmd, cwd='/content/seed-vc', capture_output=True, text=True)
 if proc.returncode != 0:
+    print('STDOUT:', proc.stdout)
     print('STDERR:', proc.stderr)
     raise RuntimeError(f'Seed-VC failed with exit code {{proc.returncode}}')
 
