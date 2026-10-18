@@ -56,27 +56,34 @@ pip install --upgrade pip setuptools wheel
 pip install flask flask-cors demucs torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cpu
 ```
 
-### 3. Running the Server
+### 3. Running the Backend & Frontend
 
-Start the Flask application server:
+You can start the backend and frontend servers using the included shell scripts:
 
+#### Start the Backend Server (Port `5000`)
 ```bash
-./venv/bin/python app.py
+./backend_start
 ```
 
-The server will start running on port `5000`:
-- **Local machine access**: `http://localhost:5000`
-- **Mobile Wi-Fi access**: `http://<YOUR_LOCAL_IP>:5000` (e.g. `http://192.168.x.x:5000`)
+#### Start the Frontend Server (Port `3000`)
+Open a second terminal and run:
+```bash
+./frontend_start
+```
+
+Access the application at:
+- **Frontend UI (Local)**: `http://localhost:3000` (or `http://<YOUR_LOCAL_IP>:3000` on mobile Wi-Fi)
+- **Backend API / Direct Server**: `http://localhost:5000` (or `http://<YOUR_LOCAL_IP>:5000`)
 
 ---
 
 ## 📱 Mobile Microphone Setup (Android Chrome)
 
-To record your voice over local Wi-Fi (`http://<YOUR_LOCAL_IP>:5000`), enable insecure origins in Chrome:
+To record your voice over local Wi-Fi (`http://<YOUR_LOCAL_IP>:3000` or `http://<YOUR_LOCAL_IP>:5000`), enable insecure origins in Chrome:
 
 1. Open Chrome on Android and go to `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
 2. Search for **"Insecure origins treated as secure"**.
-3. Add your local URL: `http://<YOUR_LOCAL_IP>:5000`.
+3. Add your local URL: `http://<YOUR_LOCAL_IP>:3000` (and/or `http://<YOUR_LOCAL_IP>:5000`).
 4. Change the dropdown to **Enabled** and tap **Relaunch**.
 
 ---
@@ -85,7 +92,9 @@ To record your voice over local Wi-Fi (`http://<YOUR_LOCAL_IP>:5000`), enable in
 
 ```
 karaoke-extractor/
-├── app.py                 # Flask server with /api/process and /api/mix endpoints
+├── app.py                 # Flask backend server with /api/process, /api/gallery, and /api/mix endpoints
+├── backend_start          # Shell script to launch the Flask backend server (port 5000)
+├── frontend_start         # Shell script to launch the frontend static server (port 3000)
 ├── static/
 │   └── index.html         # Single-page web UI & Singer Studio
 ├── .ignored/              # Local untracked folder storing MP3 uploads and outputs

@@ -306,6 +306,14 @@
     </div>
 
     <script>
+        const API_BASE = window.location.port === '5000' ? '' : `${window.location.protocol}//${window.location.hostname}:5000`;
+
+        function resolveApiUrl(path) {
+            if (!path) return '';
+            if (path.startsWith('http://') || path.startsWith('https://')) return path;
+            return `${API_BASE}${path}`;
+        }
+
         const audioInput = document.getElementById('audioInput');
         const fileInfo = document.getElementById('fileInfo');
         const processBtn = document.getElementById('processBtn');
@@ -391,7 +399,7 @@
             statusMsg.textContent = '';
 
             try {
-                const response = await fetch('/api/process', {
+                const response = await fetch(resolveApiUrl('/api/process'), {
                     method: 'POST',
                     body: formData
                 });
@@ -406,12 +414,15 @@
                 // Save current job_id
                 currentJobId = data.job_id;
 
-                // Set Audio previews & download links
-                karaokeAudio.src = data.karaoke_url;
-                vocalsAudio.src = data.vocals_url;
+                const karaokeUrl = resolveApiUrl(data.karaoke_url);
+                const vocalsUrl = resolveApiUrl(data.vocals_url);
 
-                downloadKaraoke.href = data.karaoke_url;
-                downloadVocals.href = data.vocals_url;
+                // Set Audio previews & download links
+                karaokeAudio.src = karaokeUrl;
+                if (vocalsAudio) vocalsAudio.src = vocalsUrl;
+
+                downloadKaraoke.href = karaokeUrl;
+                if (downloadVocals) downloadVocals.href = vocalsUrl;
 
                 progressSection.style.display = 'none';
                 resultSection.style.display = 'block';
@@ -482,7 +493,7 @@
                     formData.append('user_voice', audioBlob, 'user_recording.webm');
 
                     try {
-                        const mixRes = await fetch('/api/mix', {
+                        const mixRes = await fetch(resolveApiUrl('/api/mix'), {
                             method: 'POST',
                             body: formData
                         });
@@ -490,8 +501,9 @@
 
                         if (!mixRes.ok) throw new Error(mixData.error || 'Failed to mix audio');
 
-                        mixedAudio.src = mixData.mixed_url;
-                        downloadMixed.href = mixData.mixed_url;
+                        const mixedUrl = resolveApiUrl(mixData.mixed_url);
+                        mixedAudio.src = mixedUrl;
+                        downloadMixed.href = mixedUrl;
                         mixingSection.style.display = 'block';
                         recordingStatus.style.display = 'none';
                     } catch (err) {
@@ -562,7 +574,7 @@
 
         async function loadGallery() {
             try {
-                const res = await fetch('/api/gallery');
+                const res = await fetch(resolveApiUrl('/api/gallery'));
                 const data = await res.json();
 
                 if (!res.ok) return;
@@ -604,8 +616,9 @@
         const backToGalleryBtn = document.getElementById('backToGalleryBtn');
 
         window.selectTrackForKaraoke = async function(jobId, songName, karaokeUrl) {
+            const fullKaraokeUrl = resolveApiUrl(karaokeUrl);
             currentJobId = jobId;
-            downloadKaraoke.href = karaokeUrl;
+            downloadKaraoke.href = fullKaraokeUrl;
 
             // Show Studio view, hide Upload box & Gallery list for zero distraction
             resultSection.style.display = 'block';
@@ -620,13 +633,13 @@
 
             try {
                 // Fetch 100% of MP3 into browser RAM before playing
-                const response = await fetch(karaokeUrl);
+                const response = await fetch(fullKaraokeUrl);
                 const blob = await response.blob();
                 karaokeAudio.src = URL.createObjectURL(blob);
                 statusMsg.textContent = '';
             } catch (e) {
                 console.warn("Pre-buffering warning:", e);
-                karaokeAudio.src = karaokeUrl;
+                karaokeAudio.src = fullKaraokeUrl;
                 statusMsg.textContent = '';
             }
         };

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -e
+
+cd "$(dirname "$0")"
+
+FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+
+echo "=========================================="
+echo "🎨 Starting Karaoke Extractor Frontend..."
+echo "🌐 Local URL:   http://localhost:${FRONTEND_PORT}"
+LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+if [ -n "$LOCAL_IP" ]; then
+    echo "📱 Network URL: http://${LOCAL_IP}:${FRONTEND_PORT}"
+fi
+echo "=========================================="
+
+if [ -x "./venv/bin/python" ]; then
+    exec ./venv/bin/python -m http.server "$FRONTEND_PORT" --bind 0.0.0.0 --directory static
+else
+    exec python3 -m http.server "$FRONTEND_PORT" --bind 0.0.0.0 --directory static
+fi
