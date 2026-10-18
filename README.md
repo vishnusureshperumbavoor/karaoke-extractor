@@ -82,7 +82,7 @@ Instead of waiting several minutes on a local CPU, you can pair the app with a G
 - **From the Web UI**: Choose your Chrome profile at the top of the page and click **⚡ Connect Colab GPU**.
 - **Or from the Terminal**:
   ```bash
-  ./colab_connect
+  ./colab_start
   ```
 Once connected (`🟢 Google Colab GPU Active`), both **Demucs** stem separation and **Seed-VC** AI singing voice conversion automatically run on the Colab GPU in **~10–15 seconds**!
 
@@ -105,7 +105,7 @@ To record your voice over local Wi-Fi (`http://<YOUR_LOCAL_IP>:3000` or `http://
 karaoke-extractor/
 ├── app.py                 # Flask backend server (/api/library, /api/colab/*, /api/process, /api/ai-cover, /api/mix)
 ├── colab_bridge/          # Google Colab MCP bridge (client.py, chrome_profiles.py, chrome_launcher.py)
-├── colab_connect          # Interactive CLI script to pair a Chrome profile with Google Colab GPU
+├── colab_start            # Interactive CLI script to pair a Chrome profile with Google Colab GPU
 ├── backend_start          # Shell script to launch the Flask backend server (port 5000)
 ├── frontend_start         # Shell script to launch the frontend static server (port 3000)
 ├── static/
