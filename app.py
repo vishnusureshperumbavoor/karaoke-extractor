@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import subprocess
@@ -5,6 +6,14 @@ import uuid
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from colab_bridge import internal_colab_client, list_chrome_accounts
+
+
+class _SuppressColabStatusPoll(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "GET /api/colab/status" not in record.getMessage()
+
+
+logging.getLogger("werkzeug").addFilter(_SuppressColabStatusPoll())
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 CORS(app)

@@ -75,21 +75,24 @@ class ColabMCPClient:
         self.tools: Dict[str, Any] = {}
         self.logs: deque = deque(maxlen=250)
 
-        # Dedicated background event loop thread so synchronous Flask routes share one loop
-        self._loop = asyncio.new_event_loop()
-        self._thread = threading.Thread(target=self._run_loop, daemon=True)
-        self._thread.start()
-
         self._lock: Optional[asyncio.Lock] = None
         self._connected_event: Optional[asyncio.Event] = None
         self._request_id = 0
         self._pending_futures: Dict[int, asyncio.Future] = {}
         self._reader_tasks: List[asyncio.Task] = []
 
+        # Dedicated background event loop thread so synchronous Flask routes share one loop
+        self._loop = asyncio.new_event_loop()
+        self._loop_ready = threading.Event()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+        self._loop_ready.wait(timeout=5.0)
+
     def _run_loop(self):
         asyncio.set_event_loop(self._loop)
         self._lock = asyncio.Lock()
         self._connected_event = asyncio.Event()
+        self._loop_ready.set()
         self._loop.run_forever()
 
     def run_sync(self, coro, timeout: float = 1800.0) -> Any:
