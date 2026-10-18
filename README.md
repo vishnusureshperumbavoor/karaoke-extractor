@@ -77,6 +77,15 @@ Access the application at:
 - **Frontend UI (Local)**: `http://localhost:3000` (or `http://<YOUR_LOCAL_IP>:3000` on mobile Wi-Fi)
 - **Backend API / Direct Server**: `http://localhost:5000` (or `http://<YOUR_LOCAL_IP>:5000`)
 
+#### ⚡ Optional: Connect Google Colab GPU (Free T4 / L4) for ~15s Conversion
+Instead of waiting several minutes on a local CPU, you can pair the app with a Google Colab GPU session via **Google Colab MCP**:
+- **From the Web UI**: Choose your Chrome profile at the top of the page and click **⚡ Connect Colab GPU**.
+- **Or from the Terminal**:
+  ```bash
+  ./colab_connect
+  ```
+Once connected (`🟢 Google Colab GPU Active`), both **Demucs** stem separation and **Seed-VC** AI singing voice conversion automatically run on the Colab GPU in **~10–15 seconds**!
+
 ---
 
 ## 📱 Mobile Microphone Setup (Android Chrome)
@@ -94,11 +103,13 @@ To record your voice over local Wi-Fi (`http://<YOUR_LOCAL_IP>:3000` or `http://
 
 ```
 karaoke-extractor/
-├── app.py                 # Flask backend server (/api/library, /api/process, /api/ai-cover, /api/mix)
+├── app.py                 # Flask backend server (/api/library, /api/colab/*, /api/process, /api/ai-cover, /api/mix)
+├── colab_bridge/          # Google Colab MCP bridge (client.py, chrome_profiles.py, chrome_launcher.py)
+├── colab_connect          # Interactive CLI script to pair a Chrome profile with Google Colab GPU
 ├── backend_start          # Shell script to launch the Flask backend server (port 5000)
 ├── frontend_start         # Shell script to launch the frontend static server (port 3000)
 ├── static/
-│   └── index.html         # Single-page web UI, Folder Library & AI Voice Clone Studio
+│   └── index.html         # Single-page web UI, Colab GPU bar, Folder Library & AI Voice Clone Studio
 ├── .ignored/              # Local untracked folder storing songs, voice samples, and outputs
 │   ├── songs/             # Drop your MP3 / MPEG songs here for 1-click AI voice cloning
 │   ├── vsp_voice/         # Drop your reference voice clip (MP3 / MPEG / WAV) here

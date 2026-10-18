@@ -4,6 +4,7 @@ import subprocess
 import uuid
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from colab_bridge import internal_colab_client, list_chrome_accounts
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 CORS(app)
@@ -46,6 +47,22 @@ def ensure_seed_vc_ready():
             with open(lr_path, "w", encoding="utf-8") as f:
                 f.write(lr_code)
 
+    bigvgan_utils = os.path.join(SEED_VC_DIR, "modules", "bigvgan", "utils.py")
+    if os.path.exists(bigvgan_utils):
+        with open(bigvgan_utils, "r", encoding="utf-8") as f:
+            bu_code = f.read()
+        if "\nimport matplotlib\n" in bu_code:
+            bu_code = bu_code.replace(
+                '\nimport matplotlib\nimport numpy as np\nfrom scipy.io.wavfile import write\nimport torch\nfrom torch.nn.utils import weight_norm\nmatplotlib.use("Agg")\nimport matplotlib.pylab as plt',
+                '\nimport numpy as np\nfrom scipy.io.wavfile import write\nimport torch\nfrom torch.nn.utils import weight_norm'
+            )
+            bu_code = bu_code.replace(
+                'def plot_spectrogram(spectrogram):\n    fig, ax = plt.subplots(figsize=(10, 2))',
+                'def plot_spectrogram(spectrogram):\n    import matplotlib\n    matplotlib.use("Agg")\n    import matplotlib.pylab as plt\n    fig, ax = plt.subplots(figsize=(10, 2))'
+            )
+            with open(bigvgan_utils, "w", encoding="utf-8") as f:
+                f.write(bu_code)
+
     for rel_path in ["inference.py", "modules/commons.py", "modules/rmvpe.py"]:
         target_file = os.path.join(SEED_VC_DIR, rel_path)
         if os.path.exists(target_file):
@@ -80,14 +97,13 @@ def find_existing_job_for_song(song_name):
     return None
 
 
-def separate_song_file(source_file_path, original_filename):
-    """Convert any audio/mpeg file to MP3 and run Demucs stem separation."""
+def separate_song_file(source_file_path, original_filename, use_colab=None):
+    """Convert any audio/mpeg file to MP3 and run Demucs stem separation (on Colab GPU if connected, else local CPU)."""
     job_id = str(uuid.uuid4())
     job_dir = os.path.join(UPLOAD_FOLDER, job_id)
     os.makedirs(job_dir, exist_ok=True)
 
     input_path = os.path.join(job_dir, "input.mp3")
-    # Convert .mpeg/.mp3/.wav/.m4a to standard stereo 44.1kHz MP3 using ffmpeg
     subprocess.run([
         "ffmpeg", "-y",
         "-i", source_file_path,
@@ -105,27 +121,95 @@ def separate_song_file(source_file_path, original_filename):
     with open(meta_path, "w", encoding="utf-8") as f:
         f.write(original_filename)
 
-    cmd = [
-        os.path.abspath("./venv/bin/demucs"),
-        "--two-stems", "vocals",
-        "-n", "htdemucs",
-        "--mp3",
-        "-o", out_dir,
-        input_path
-    ]
-    subprocess.run(cmd, capture_output=True, text=True, check=True)
-
     separated_dir = os.path.join(out_dir, "htdemucs", "input")
+    os.makedirs(separated_dir, exist_ok=True)
     karaoke_path = os.path.join(separated_dir, "no_vocals.mp3")
+    vocals_path = os.path.join(separated_dir, "vocals.mp3")
+
+    should_use_colab = (
+        use_colab if use_colab is not None else (internal_colab_client.status == "connected")
+    )
+
+    if should_use_colab and internal_colab_client.status == "connected":
+        internal_colab_client.run_sync(
+            internal_colab_client.run_demucs_on_colab(input_path, vocals_path, karaoke_path)
+        )
+    else:
+        cmd = [
+            os.path.abspath("./venv/bin/demucs"),
+            "--two-stems", "vocals",
+            "-n", "htdemucs",
+            "--mp3",
+            "-o", out_dir,
+            input_path
+        ]
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+
     if not os.path.exists(karaoke_path):
         raise RuntimeError("Failed to generate karaoke audio track")
 
     return job_id
 
 
+@app.route("/api/colab/status", methods=["GET"])
+def colab_status():
+    """Returns the internal Google Colab MCP daemon status."""
+    return jsonify({
+        "status": internal_colab_client.status,
+        "message": internal_colab_client.status_message,
+        "gpu_info": internal_colab_client.gpu_info,
+        "profileDirectory": internal_colab_client.selected_profile,
+        "tools": list(internal_colab_client.tools.keys()),
+        "connected": internal_colab_client.status == "connected",
+        "colabAvailable": internal_colab_client.status == "connected",
+        "recent_logs": list(internal_colab_client.logs)[-25:],
+    })
+
+
+@app.route("/api/colab/accounts", methods=["GET"])
+def colab_accounts():
+    """List Chrome profiles / Gmail accounts available on this machine."""
+    payload = list_chrome_accounts()
+    return jsonify(payload)
+
+
+@app.route("/api/colab/connect", methods=["POST"])
+def colab_connect():
+    """Triggers pairing with Google Colab tab in the selected Chrome profile."""
+    data = request.get_json(silent=True) or {}
+    profile = request.args.get("profileDirectory") or data.get("profileDirectory")
+    force = str(request.args.get("force") or data.get("force", "false")).lower() == "true"
+    try:
+        res = internal_colab_client.run_sync(
+            internal_colab_client.connect_browser(profile_directory=profile, force=force),
+            timeout=60.0,
+        )
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"status": "error", "connected": False, "message": str(e)}), 500
+
+
+@app.route("/api/colab/execute", methods=["POST"])
+def colab_execute():
+    """Executes Python code in Google Colab Cloud GPU."""
+    data = request.get_json(silent=True) or {}
+    code = data.get("code", "")
+    keep_cell = bool(data.get("keep_cell", True))
+    if not code.strip():
+        return jsonify({"error": "Code cannot be empty"}), 400
+    try:
+        res = internal_colab_client.run_sync(
+            internal_colab_client.execute_code(code, keep_cell=keep_cell)
+        )
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/")
 def index():
     return send_from_directory("static", "index.html")
+
 
 
 @app.route("/api/library", methods=["GET"])
@@ -376,9 +460,8 @@ def mix_audio():
 def generate_ai_cover():
     """
     Zero-Shot Singing Voice Conversion using Seed-VC:
-    Supports:
-    - song_filename (from .ignored/songs/) OR job_id (already separated song)
-    - voice_filename (from .ignored/vsp_voice/) OR uploaded user_voice file
+    Automatically runs on Google Colab GPU (~15s) when paired via Colab MCP,
+    or falls back to local CPU inference.
     """
     job_id = request.form.get("job_id")
     song_filename = request.form.get("song_filename")
@@ -387,6 +470,13 @@ def generate_ai_cover():
     diffusion_steps = int(request.form.get("diffusion_steps", "10"))
     vocal_volume = request.form.get("vocal_volume", "1.3")
     music_volume = request.form.get("music_volume", "1.0")
+    use_colab_param = request.form.get("use_colab")
+
+    should_use_colab = (
+        (use_colab_param.lower() == "true")
+        if use_colab_param is not None
+        else (internal_colab_client.status == "connected")
+    )
 
     # If song_filename from .ignored/songs was provided without job_id, extract or reuse existing job_id
     if not job_id and song_filename:
@@ -397,9 +487,11 @@ def generate_ai_cover():
         job_id = find_existing_job_for_song(safe_song)
         if not job_id:
             try:
-                job_id = separate_song_file(song_path, safe_song)
+                job_id = separate_song_file(song_path, safe_song, use_colab=should_use_colab)
             except subprocess.CalledProcessError as e:
                 return jsonify({"error": "Demucs separation failed", "details": e.stderr}), 500
+            except Exception as e:
+                return jsonify({"error": f"Separation failed: {e}"}), 500
 
     if not job_id:
         return jsonify({"error": "Missing job_id or song_filename"}), 400
@@ -411,11 +503,6 @@ def generate_ai_cover():
 
     if not os.path.exists(karaoke_path) or not os.path.exists(vocals_path):
         return jsonify({"error": "Separated vocals or instrumental track not found for this song"}), 404
-
-    try:
-        ensure_seed_vc_ready()
-    except subprocess.CalledProcessError as e:
-        return jsonify({"error": "Failed to initialize Seed-VC repository", "details": e.stderr}), 500
 
     ref_wav_path = os.path.join(job_dir, "user_voice_ref.wav")
 
@@ -454,61 +541,84 @@ def generate_ai_cover():
     except subprocess.CalledProcessError as e:
         return jsonify({"error": "Failed to convert voice sample to WAV", "details": e.stderr}), 500
 
-    vc_out_dir = os.path.join(job_dir, "seed_vc_out")
-    if os.path.exists(vc_out_dir):
-        shutil.rmtree(vc_out_dir)
-    os.makedirs(vc_out_dir, exist_ok=True)
-
-    python_bin = os.path.abspath("./venv/bin/python") if os.path.exists("./venv/bin/python") else "python3"
-    seed_vc_cmd = [
-        python_bin,
-        "inference.py",
-        "--source", vocals_path,
-        "--target", ref_wav_path,
-        "--output", vc_out_dir,
-        "--diffusion-steps", str(diffusion_steps),
-        "--f0-condition", "True",
-        "--auto-f0-adjust", "True",
-        "--semi-tone-shift", str(pitch_shift),
-        "--fp16", "False"
-    ]
-
-    try:
-        subprocess.run(seed_vc_cmd, cwd=SEED_VC_DIR, capture_output=True, text=True, check=True)
-    except subprocess.CalledProcessError as e:
-        print("Seed-VC Error Output:", e.stderr)
-        return jsonify({
-            "error": "Seed-VC AI voice conversion failed",
-            "details": e.stderr or e.stdout
-        }), 500
-
-    # Locate the converted WAV file produced by Seed-VC
-    generated_wavs = [
-        os.path.join(vc_out_dir, f)
-        for f in os.listdir(vc_out_dir)
-        if f.endswith(".wav")
-    ]
-    if not generated_wavs:
-        return jsonify({"error": "Seed-VC did not produce a converted vocal track"}), 500
-
-    converted_wav_path = generated_wavs[0]
     ai_vocals_mp3_path = os.path.join(job_dir, "ai_vocals.mp3")
     ai_cover_mp3_path = os.path.join(job_dir, "ai_cover_song.mp3")
+    used_engine = "Local CPU"
 
-    try:
-        # 1. Export isolated AI singing vocals as MP3
+    if should_use_colab and internal_colab_client.status == "connected":
+        try:
+            internal_colab_client.run_sync(
+                internal_colab_client.run_seed_vc_on_colab(
+                    vocals_path=vocals_path,
+                    target_voice_path=ref_wav_path,
+                    out_ai_vocals_mp3_path=ai_vocals_mp3_path,
+                    diffusion_steps=max(diffusion_steps, 25),
+                    pitch_shift=pitch_shift,
+                    f0_condition=True,
+                    auto_f0_adjust=True,
+                )
+            )
+            used_engine = f"Google Colab GPU ({internal_colab_client.gpu_info or 'CUDA'})"
+            vocals_to_mix = ai_vocals_mp3_path
+        except Exception as e:
+            print("Colab Seed-VC Error:", e)
+            return jsonify({"error": f"Google Colab GPU conversion failed: {e}"}), 500
+    else:
+        try:
+            ensure_seed_vc_ready()
+        except subprocess.CalledProcessError as e:
+            return jsonify({"error": "Failed to initialize Seed-VC repository", "details": e.stderr}), 500
+
+        vc_out_dir = os.path.join(job_dir, "seed_vc_out")
+        if os.path.exists(vc_out_dir):
+            shutil.rmtree(vc_out_dir)
+        os.makedirs(vc_out_dir, exist_ok=True)
+
+        python_bin = os.path.abspath("./venv/bin/python") if os.path.exists("./venv/bin/python") else "python3"
+        seed_vc_cmd = [
+            python_bin,
+            "inference.py",
+            "--source", vocals_path,
+            "--target", ref_wav_path,
+            "--output", vc_out_dir,
+            "--diffusion-steps", str(diffusion_steps),
+            "--f0-condition", "True",
+            "--auto-f0-adjust", "True",
+            "--semi-tone-shift", str(pitch_shift),
+            "--fp16", "False"
+        ]
+
+        try:
+            subprocess.run(seed_vc_cmd, cwd=SEED_VC_DIR, capture_output=True, text=True, check=True)
+        except subprocess.CalledProcessError as e:
+            print("Seed-VC Error Output:", e.stderr)
+            return jsonify({
+                "error": "Seed-VC AI voice conversion failed",
+                "details": e.stderr or e.stdout
+            }), 500
+
+        generated_wavs = [
+            os.path.join(vc_out_dir, f)
+            for f in os.listdir(vc_out_dir)
+            if f.endswith(".wav")
+        ]
+        if not generated_wavs:
+            return jsonify({"error": "Seed-VC did not produce a converted vocal track"}), 500
+
+        converted_wav_path = generated_wavs[0]
         subprocess.run([
             "ffmpeg", "-y",
             "-i", converted_wav_path,
             "-b:a", "192k",
             ai_vocals_mp3_path
         ], capture_output=True, text=True, check=True)
+        vocals_to_mix = converted_wav_path
 
-        # 2. Mix AI singing vocals with instrumental backing track
+    try:
         subprocess.run([
             "ffmpeg", "-y",
             "-i", karaoke_path,
-            "-i", converted_wav_path,
+            "-i", vocals_to_mix,
             "-filter_complex",
             f"[0:a]volume={music_volume}[a0];[1:a]volume={vocal_volume}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[out]",
             "-map", "[out]",
@@ -519,11 +629,12 @@ def generate_ai_cover():
         return jsonify({
             "success": True,
             "job_id": job_id,
+            "engine": used_engine,
             "karaoke_url": f"/api/download/{job_id}/no_vocals.mp3",
             "vocals_url": f"/api/download/{job_id}/vocals.mp3",
             "ai_cover_url": f"/api/download/{job_id}/ai_cover_song.mp3",
             "ai_vocals_url": f"/api/download/{job_id}/ai_vocals.mp3",
-            "message": "AI Voice Clone Song Cover generated successfully!"
+            "message": f"AI Voice Clone Song Cover generated via {used_engine}!"
         })
     except subprocess.CalledProcessError as e:
         print("FFmpeg AI cover mixing error:", e.stderr)

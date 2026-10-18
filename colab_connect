@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Interactive Colab MCP connect: list Chrome/Gmail profiles -> pick -> open Colab
+#
+# Usage:
+#   ./colab_connect
+
+set -euo pipefail
+
+API="${KARAOKE_API:-http://localhost:5000}"
+
+echo "Karaoke Extractor Colab API: $API"
+echo
+curl -sS "$API/api/colab/status" | jq '{status, connected, gpu_info, message}' || {
+  echo "Backend not reachable at $API — start ./backend_start first." >&2
+  exit 1
+}
+echo
+
+ACCOUNTS_JSON="$(curl -sS "$API/api/colab/accounts")"
+echo "$ACCOUNTS_JSON" | jq '{chromeUserDataDir, chromeExecutable, accountCount: (.accounts|length)}'
+
+mapfile -t ROWS < <(echo "$ACCOUNTS_JSON" | jq -r '.accounts[] | [.profileDirectory, (.email // ""), (.name // "")] | @tsv')
+if [[ ${#ROWS[@]} -eq 0 ]]; then
+  echo "No Chrome profiles found; connecting with Default profile..."
+  curl -sS -X POST "$API/api/colab/connect" -H 'Content-Type: application/json' -d '{"profileDirectory":"Default","force":true}' | jq .
+  exit 0
+fi
+
+echo
+echo "Available Chrome / Gmail profiles:"
+for i in "${!ROWS[@]}"; do
+  IFS=$'\t' read -r dir email name <<<"${ROWS[$i]}"
+  label="$dir"
+  [[ -n "$email" ]] && label+="  <$email>"
+  [[ -n "$name" && "$name" != "$email" ]] && label+="  ($name)"
+  printf "  %d) %s\n" "$((i + 1))" "$label"
+done
+
+echo
+read -r -p "Select number [1-${#ROWS[@]}]: " CHOICE
+if ! [[ "$CHOICE" =~ ^[0-9]+$ ]] || (( CHOICE < 1 || CHOICE > ${#ROWS[@]} )); then
+  echo "Invalid choice." >&2
+  exit 1
+fi
+
+IFS=$'\t' read -r PROFILE EMAIL NAME <<<"${ROWS[$((CHOICE - 1))]}"
+echo
+echo "Connecting: $PROFILE${EMAIL:+  <$EMAIL>} ..."
+curl -sS -X POST "$API/api/colab/connect" \
+  -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg p "$PROFILE" '{profileDirectory:$p, force:true}')" | jq .
+
+echo
+echo "Waiting for Colab tab pairing (approve in the Chrome window that just opened)..."
+for i in $(seq 1 30); do
+  sleep 2
+  ST="$(curl -sS "$API/api/colab/status")"
+  CONN="$(echo "$ST" | jq -r '.connected')"
+  GPU="$(echo "$ST" | jq -r '.gpu_info // ""')"
+  MSG="$(echo "$ST" | jq -r '.message')"
+  echo "  [$i] connected=$CONN  $MSG"
+  if [[ "$CONN" == "true" ]]; then
+    echo
+    echo "Connected to Google Colab GPU!"
+    echo "$ST" | jq '{status, connected, gpu_info, message}'
+    exit 0
+  fi
+done
+
+echo
+echo "Still waiting. Keep the Colab tab open, then check:"
+echo "  curl -sS $API/api/colab/status | jq ."
+exit 1

@@ -230,6 +230,25 @@
             <p>Upload any MP3 song to isolate vocals and extract pure Instrumental/Karaoke audio</p>
         </div>
 
+        <!-- Google Colab MCP GPU Acceleration Bar -->
+        <div id="colabBridgeCard" style="margin-bottom: 24px; padding: 14px 16px; border-radius: 14px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(245, 158, 11, 0.4); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="colabStatusDot" style="width: 10px; height: 10px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 6px #ef4444; display: inline-block;"></span>
+                <div>
+                    <div id="colabStatusTitle" style="font-size: 0.92rem; font-weight: 600; color: #f8fafc;">⚡ Google Colab GPU Bridge: Disconnected (Using Local CPU)</div>
+                    <div id="colabStatusSub" style="font-size: 0.78rem; color: var(--text-sub);">Pair with Google Colab (Free T4 / L4 GPU) for ~15s song conversion</div>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <select id="colabProfileSelect" style="padding: 7px 10px; border-radius: 8px; background: rgba(30, 41, 59, 0.9); color: #e2e8f0; border: 1px solid var(--border-color); font-size: 0.8rem;">
+                    <option value="Default">Chrome Profile: Default</option>
+                </select>
+                <button id="colabConnectBtn" type="button" style="padding: 8px 14px; border-radius: 8px; background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%); color: white; border: none; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    ⚡ Connect Colab GPU
+                </button>
+            </div>
+        </div>
+
         <div class="upload-box" id="dropZone">
             <input type="file" id="audioInput" accept="audio/*, .mp3, .wav, .m4a" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 10;">
             
@@ -1080,9 +1099,93 @@
         refreshLibraryBtn.addEventListener('click', loadLibrary);
         refreshGalleryBtn.addEventListener('click', loadGallery);
 
-        // Load folder library and gallery on page init
+        // Google Colab MCP GPU Bridge Logic
+        const colabBridgeCard = document.getElementById('colabBridgeCard');
+        const colabStatusDot = document.getElementById('colabStatusDot');
+        const colabStatusTitle = document.getElementById('colabStatusTitle');
+        const colabStatusSub = document.getElementById('colabStatusSub');
+        const colabProfileSelect = document.getElementById('colabProfileSelect');
+        const colabConnectBtn = document.getElementById('colabConnectBtn');
+
+        async function loadColabAccounts() {
+            try {
+                const res = await fetch(resolveApiUrl('/api/colab/accounts'));
+                const data = await res.json();
+                if (res.ok && data.accounts && data.accounts.length > 0) {
+                    colabProfileSelect.innerHTML = '';
+                    data.accounts.forEach(acc => {
+                        const opt = document.createElement('option');
+                        opt.value = acc.profileDirectory;
+                        opt.textContent = acc.email
+                            ? `${acc.email} (${acc.profileDirectory})`
+                            : `${acc.name || acc.profileDirectory}`;
+                        colabProfileSelect.appendChild(opt);
+                    });
+                }
+            } catch (e) {
+                console.warn('Could not load Chrome profiles:', e);
+            }
+        }
+
+        async function checkColabStatus() {
+            try {
+                const res = await fetch(resolveApiUrl('/api/colab/status'));
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.connected) {
+                    colabStatusDot.style.background = '#10b981';
+                    colabStatusDot.style.boxShadow = '0 0 8px #10b981';
+                    colabBridgeCard.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+                    colabStatusTitle.textContent = `🟢 Google Colab GPU Active: ${data.gpu_info || 'Connected'}`;
+                    colabStatusSub.textContent = 'Demucs & Seed-VC will automatically run on Colab Cloud GPU (~15s per song)!';
+                    colabConnectBtn.textContent = '🟢 GPU Connected';
+                    colabConnectBtn.style.background = 'rgba(16, 185, 129, 0.25)';
+                    colabConnectBtn.style.border = '1px solid #10b981';
+                } else if (data.status === 'connecting') {
+                    colabStatusDot.style.background = '#f59e0b';
+                    colabStatusDot.style.boxShadow = '0 0 8px #f59e0b';
+                    colabStatusTitle.textContent = '⏳ Connecting to Google Colab Tab...';
+                    colabStatusSub.textContent = data.message || 'Approve pairing in the opened Chrome tab';
+                } else {
+                    colabStatusDot.style.background = '#ef4444';
+                    colabStatusDot.style.boxShadow = '0 0 6px #ef4444';
+                    colabBridgeCard.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+                    colabStatusTitle.textContent = '⚡ Google Colab GPU Bridge: Disconnected (Using Local CPU)';
+                    colabStatusSub.textContent = 'Pair with Google Colab (Free T4 / L4 GPU) for ~15s song conversion';
+                    colabConnectBtn.textContent = '⚡ Connect Colab GPU';
+                    colabConnectBtn.style.background = 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)';
+                    colabConnectBtn.style.border = 'none';
+                }
+            } catch (e) {
+                // Backend offline
+            }
+        }
+
+        colabConnectBtn.addEventListener('click', async () => {
+            colabConnectBtn.disabled = true;
+            colabConnectBtn.textContent = '⏳ Opening Colab...';
+            colabStatusTitle.textContent = '⏳ Launching Chrome & Pairing with Google Colab MCP...';
+            try {
+                const profile = colabProfileSelect.value || 'Default';
+                await fetch(resolveApiUrl('/api/colab/connect'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ profileDirectory: profile, force: true })
+                });
+                await checkColabStatus();
+            } catch (err) {
+                colabStatusSub.textContent = 'Error connecting Colab: ' + err.message;
+            } finally {
+                colabConnectBtn.disabled = false;
+            }
+        });
+
+        // Load folder library, gallery, and Colab status on page init
         loadLibrary();
         loadGallery();
+        loadColabAccounts();
+        checkColabStatus();
+        setInterval(checkColabStatus, 4000);
     </script>
 </body>
 </html>
