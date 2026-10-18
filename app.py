@@ -83,6 +83,10 @@ def ensure_seed_vc_ready():
                 "WhisperModel.from_pretrained(whisper_name, torch_dtype=torch.float16)",
                 'WhisperModel.from_pretrained(whisper_name, torch_dtype=(torch.float16 if (fp16 and device.type != "cpu") else torch.float32))'
             )
+            updated = updated.replace(
+                'torchaudio.save(os.path.join(args.output, f"vc_{source_name}_{target_name}_{length_adjust}_{diffusion_steps}_{inference_cfg_rate}.wav"), vc_wave.cpu(), sr)',
+                'import soundfile as sf\n    sf.write(os.path.join(args.output, f"vc_{source_name}_{target_name}_{length_adjust}_{diffusion_steps}_{inference_cfg_rate}.wav"), vc_wave.squeeze().cpu().numpy(), sr)'
+            )
             if updated != code:
                 with open(target_file, "w", encoding="utf-8") as f:
                     f.write(updated)
@@ -447,7 +451,7 @@ def mix_audio():
         "-i", karaoke_path,
         "-i", voice_path,
         "-filter_complex",
-        f"[0:a]volume={music_volume}[a0];[1:a]volume={vocal_volume}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[out]",
+        f"[0:a]volume={music_volume}[a0];[1:a]volume={vocal_volume}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=2:normalize=0,alimiter=limit=0.97[out]",
         "-map", "[out]",
         "-b:a", "192k",
         output_mixed_path
@@ -629,7 +633,7 @@ def generate_ai_cover():
             "-i", karaoke_path,
             "-i", vocals_to_mix,
             "-filter_complex",
-            f"[0:a]volume={music_volume}[a0];[1:a]volume={vocal_volume}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[out]",
+            f"[0:a]volume={music_volume}[a0];[1:a]volume={vocal_volume}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=2:normalize=0,alimiter=limit=0.97[out]",
             "-map", "[out]",
             "-b:a", "192k",
             ai_cover_mp3_path
