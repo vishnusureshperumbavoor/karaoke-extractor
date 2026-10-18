@@ -549,7 +549,7 @@ print('DEMUCS_COLAB_DONE')
                 capture_output=True,
             )
             subprocess.run(
-                ["ffmpeg", "-y", "-i", target_voice_path, "-ar", "44100", "-ac", "1", "-b:a", "128k", compact_ref],
+                ["ffmpeg", "-y", "-i", target_voice_path, "-t", "12", "-ar", "44100", "-ac", "1", "-b:a", "128k", compact_ref],
                 check=True,
                 capture_output=True,
             )
@@ -570,28 +570,43 @@ if not os.path.exists('/content/.seed_vc_deps_ready'):
     print('Installing Seed-VC lightweight dependencies on Colab...')
     subprocess.run([
         sys.executable, '-m', 'pip', 'install', '-q',
-        'munch', 'einops', 'descript-audio-codec'
+        'munch', 'einops', 'descript-audio-codec', 'soundfile'
     ], check=True)
-    # Patch lazy imports, PyTorch 2.6 weights_only=False, and transformers 5.x compatibility
-    lr_path = '/content/seed-vc/modules/length_regulator.py'
-    if os.path.exists(lr_path):
-        code = open(lr_path).read()
-        code = code.replace('\\nfrom dac.nn.quantize import VectorQuantize', '')
-        code = code.replace('if vector_quantize:\\n                self.vq = VectorQuantize',
-                            'if vector_quantize:\\n                from dac.nn.quantize import VectorQuantize\\n                self.vq = VectorQuantize')
-        open(lr_path, 'w').write(code)
-    for rel in ['inference.py', 'modules/commons.py', 'modules/rmvpe.py']:
-        p = os.path.join('/content/seed-vc', rel)
-        if os.path.exists(p):
-            c = open(p).read()
-            c = c.replace('map_location="cpu")', 'map_location="cpu", weights_only=False)')
-            c = c.replace("map_location='cpu')", "map_location='cpu', weights_only=False)")
-            c = c.replace(
-                "whisper_model._mask_input_features(\\n                ori_inputs.input_features, attention_mask=ori_inputs.attention_mask)",
-                "(whisper_model._mask_input_features(ori_inputs.input_features, attention_mask=ori_inputs.attention_mask) if hasattr(whisper_model, '_mask_input_features') else ori_inputs.input_features)"
-            )
-            open(p, 'w').write(c)
     open('/content/.seed_vc_deps_ready', 'w').close()
+
+# Always ensure compatibility patches for PyTorch 2.6+, transformers 5.x, huggingface_hub 1.x, and torchaudio 2.10+ are applied
+lr_path = '/content/seed-vc/modules/length_regulator.py'
+if os.path.exists(lr_path):
+    code = open(lr_path).read()
+    code = code.replace('\\nfrom dac.nn.quantize import VectorQuantize', '')
+    code = code.replace('if vector_quantize:\\n                self.vq = VectorQuantize',
+                        'if vector_quantize:\\n                from dac.nn.quantize import VectorQuantize\\n                self.vq = VectorQuantize')
+    open(lr_path, 'w').write(code)
+
+bv_path = '/content/seed-vc/modules/bigvgan/bigvgan.py'
+if os.path.exists(bv_path):
+    bv = open(bv_path).read()
+    bv = bv.replace('proxies: Optional[Dict],', 'proxies: Optional[Dict] = None,')
+    bv = bv.replace('resume_download: bool,', 'resume_download: bool = False,')
+    bv = bv.replace('resume_download=resume_download,', '')
+    bv = bv.replace('torch.load(model_file, map_location=map_location)', 'torch.load(model_file, map_location=map_location, weights_only=False)')
+    open(bv_path, 'w').write(bv)
+
+for rel in ['inference.py', 'modules/commons.py', 'modules/rmvpe.py']:
+    p = os.path.join('/content/seed-vc', rel)
+    if os.path.exists(p):
+        c = open(p).read()
+        c = c.replace('map_location="cpu")', 'map_location="cpu", weights_only=False)')
+        c = c.replace("map_location='cpu')", "map_location='cpu', weights_only=False)")
+        c = c.replace(
+            "whisper_model._mask_input_features(\\n                ori_inputs.input_features, attention_mask=ori_inputs.attention_mask)",
+            "(whisper_model._mask_input_features(ori_inputs.input_features, attention_mask=ori_inputs.attention_mask) if hasattr(whisper_model, '_mask_input_features') else ori_inputs.input_features)"
+        )
+        c = c.replace(
+            'torchaudio.save(os.path.join(args.output, f"vc_{{source_name}}_{{target_name}}_{{length_adjust}}_{{diffusion_steps}}_{{inference_cfg_rate}}.wav"), vc_wave.cpu(), sr)',
+            'import soundfile as sf; sf.write(os.path.join(args.output, f"vc_{{source_name}}_{{target_name}}_{{length_adjust}}_{{diffusion_steps}}_{{inference_cfg_rate}}.wav"), vc_wave.squeeze().cpu().numpy(), sr)'
+        )
+        open(p, 'w').write(c)
 
 out_dir = '/content/seedvc_job/out'
 shutil.rmtree(out_dir, ignore_errors=True)
