@@ -7,8 +7,9 @@ A modern, full-stack open-source web application that extracts pure instrumental
 ## 🌟 Key Features
 
 - **🤖 AI Instrumental Separation**: Uses Meta Research's **Demucs (htdemucs)** deep learning model to separate vocal and instrumental stems offline for free.
+- **🗣️ Zero-Shot AI Voice Clone Cover (Seed-VC)**: Upload or record just **10–25 seconds of your voice**, and **Seed-VC** converts the original singer's vocals into your voice (preserving melody and pitch) and mixes it with the instrumental track!
 - **🎙️ Live Karaoke Studio**: Sing along in real-time using your mobile phone or laptop microphone while the instrumental backing track plays out loud.
-- **🎛️ Auto Audio Mixing**: Powered by **FFmpeg**, automatically blends your recorded voice with the backing track into a studio-grade combined MP3.
+- **🎛️ Auto Audio Mixing**: Powered by **FFmpeg**, automatically blends your recorded or AI-cloned voice with the backing track into a studio-grade combined MP3.
 - **📚 Extracted Song Gallery**: Keeps a persistent local gallery of all your previously extracted songs for quick selection and re-singing.
 - **📱 Focused Mobile UI**: Zero-distraction singer view with green **Start Recording** / red **Stop & Mix** single toggle button and an instant **Cancel** option.
 - **🔒 100% Free & Local**: No paid APIs, no subscriptions, and no cloud data uploads required. All storage is kept locally inside a `.ignored/` folder.
@@ -18,7 +19,7 @@ A modern, full-stack open-source web application that extracts pure instrumental
 ## 🛠️ Tech Stack
 
 - **Backend**: Python 3.12, Flask, Flask-CORS
-- **Audio Processing Engine**: PyTorch, Demucs (`htdemucs`), FFmpeg
+- **Audio & AI Processing Engine**: PyTorch, Demucs (`htdemucs`), Seed-VC (`U-DiT` + `RMVPE` + `BigVGAN`), FFmpeg
 - **Frontend**: HTML5, Vanilla CSS (Glassmorphism & Outfit Font), Web Audio / MediaRecorder API
 - **Version Control**: Git, GitHub
 
@@ -54,6 +55,7 @@ source venv/bin/activate
 # Install dependencies
 pip install --upgrade pip setuptools wheel
 pip install flask flask-cors demucs torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cpu
+pip install librosa scipy munch huggingface-hub transformers accelerate soundfile pyyaml
 ```
 
 ### 3. Running the Backend & Frontend
@@ -92,12 +94,16 @@ To record your voice over local Wi-Fi (`http://<YOUR_LOCAL_IP>:3000` or `http://
 
 ```
 karaoke-extractor/
-├── app.py                 # Flask backend server with /api/process, /api/gallery, and /api/mix endpoints
+├── app.py                 # Flask backend server (/api/library, /api/process, /api/ai-cover, /api/mix)
 ├── backend_start          # Shell script to launch the Flask backend server (port 5000)
 ├── frontend_start         # Shell script to launch the frontend static server (port 3000)
 ├── static/
-│   └── index.html         # Single-page web UI & Singer Studio
-├── .ignored/              # Local untracked folder storing MP3 uploads and outputs
+│   └── index.html         # Single-page web UI, Folder Library & AI Voice Clone Studio
+├── .ignored/              # Local untracked folder storing songs, voice samples, and outputs
+│   ├── songs/             # Drop your MP3 / MPEG songs here for 1-click AI voice cloning
+│   ├── vsp_voice/         # Drop your reference voice clip (MP3 / MPEG / WAV) here
+│   ├── processed/         # Separated stems and mixed AI song covers
+│   └── seed-vc/           # Local Seed-VC model & checkpoints
 ├── .gitignore             # Configured to exclude venv/, .ignored/, and logs
 └── README.md              # Project documentation
 ```

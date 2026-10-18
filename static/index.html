@@ -257,12 +257,89 @@
         </div>
 
         <div class="result-section" id="resultSection">
+            <!-- AI Voice Clone Song Cover Card (Seed-VC) -->
+            <div class="result-card" style="border: 1px solid rgba(56, 189, 248, 0.45); background: rgba(12, 74, 110, 0.25); margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                    <h3 style="color: #38bdf8; margin-bottom: 0;">🤖 AI Voice Clone Song Cover (Seed-VC)</h3>
+                    <button id="backToGalleryBtn" style="background: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); color: #cbd5e1; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">← Back to Songs</button>
+                </div>
+                <p style="color: var(--text-sub); font-size: 0.9rem; margin-bottom: 14px;">
+                    Select your saved voice from <code>.ignored/vsp_voice/</code> (or record/upload a custom clip). Seed-VC will replace the original singer's voice with yours!
+                </p>
+
+                <!-- Step 1: Select Saved Voice from .ignored/vsp_voice or Record/Upload -->
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 0.8rem; color: var(--text-sub); margin-bottom: 4px;">Voice Source (from <code>.ignored/vsp_voice</code>)</label>
+                    <select id="savedVoiceSelect" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: rgba(15, 23, 42, 0.8); color: #f8fafc; border: 1px solid rgba(56, 189, 248, 0.4); font-size: 0.85rem;">
+                        <option value="">Loading saved voices...</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px;">
+                    <button id="recordSampleBtn" class="download-btn primary" style="background: #0284c7; border: none; cursor: pointer;">
+                        🎙️ Or Record 15s Voice Sample
+                    </button>
+                    <label for="voiceSampleInput" class="download-btn" style="cursor: pointer; border: 1px solid rgba(56, 189, 248, 0.4); color: #bae6fd;">
+                        📁 Or Upload Custom Voice Clip
+                    </label>
+                    <input type="file" id="voiceSampleInput" accept="audio/*,.mp3,.mpeg,.wav,.m4a,.webm,.ogg" style="display: none;">
+                </div>
+
+                <div id="voiceSamplePreviewBox" style="display: none; margin-bottom: 14px; padding: 10px 12px; border-radius: 10px; background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(56, 189, 248, 0.25);">
+                    <p id="voiceSampleLabel" style="font-size: 0.85rem; color: #7dd3fc; margin-bottom: 6px;">✅ Voice sample ready</p>
+                    <audio id="voiceSampleAudio" controls style="height: 36px; width: 100%;"></audio>
+                </div>
+
+                <!-- Step 2: Pitch & Quality Controls -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-sub); margin-bottom: 4px;">Pitch Shift (Semitones)</label>
+                        <select id="pitchShiftSelect" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: rgba(15, 23, 42, 0.8); color: #f8fafc; border: 1px solid var(--border-color); font-size: 0.85rem;">
+                            <option value="0" selected>0 (Keep Auto-Adjusted Key)</option>
+                            <option value="-12">-12 (Female Song → Male Voice)</option>
+                            <option value="-6">-6 Semitones (Lower)</option>
+                            <option value="-3">-3 Semitones (Slightly Lower)</option>
+                            <option value="3">+3 Semitones (Slightly Higher)</option>
+                            <option value="6">+6 Semitones (Higher)</option>
+                            <option value="12">+12 (Male Song → Female Voice)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-sub); margin-bottom: 4px;">Conversion Speed / Quality</label>
+                        <select id="diffusionStepsSelect" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: rgba(15, 23, 42, 0.8); color: #f8fafc; border: 1px solid var(--border-color); font-size: 0.85rem;">
+                            <option value="10" selected>Fast (10 Diffusion Steps — Best for CPU)</option>
+                            <option value="18">Balanced (18 Diffusion Steps)</option>
+                            <option value="25">Studio Quality (25 Diffusion Steps)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button id="generateAiCoverBtn" class="download-btn primary" style="width: 100%; justify-content: center; background: linear-gradient(135deg, #0284c7 0%, #7c3aed 100%); border: none; cursor: pointer; padding: 12px; font-size: 0.95rem;">
+                    ✨ Generate Song in My Voice (AI Cover)
+                </button>
+
+                <div id="aiCoverStatus" style="font-size: 0.9rem; color: #38bdf8; display: none; margin-top: 12px; text-align: center;"></div>
+
+                <div id="aiCoverResultBox" style="display: none; margin-top: 16px; border-top: 1px dashed var(--border-color); padding-top: 14px;">
+                    <h4 style="margin-bottom: 8px; font-size: 1rem; color: #38bdf8;">🌟 Your AI-Cloned Song Cover</h4>
+                    <audio id="aiCoverAudio" controls></audio>
+                    <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                        <a id="downloadAiCover" class="download-btn primary" style="background: #0284c7;" download>
+                            ⬇️ Download AI Song Cover MP3
+                        </a>
+                        <a id="downloadAiVocals" class="download-btn" style="border: 1px solid rgba(56, 189, 248, 0.4);" download>
+                            ⬇️ Download Isolated AI Vocals
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Karaoke Recording Studio Card -->
             <div class="result-card" style="border: 1px solid rgba(168, 85, 247, 0.4); background: rgba(88, 28, 135, 0.2);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-                    <h3 style="color: #c084fc; margin-bottom: 0;">🎙️ Karaoke Recording Studio</h3>
-                    <button id="backToGalleryBtn" style="background: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); color: #cbd5e1; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">← Back to Gallery</button>
+                    <h3 style="color: #c084fc; margin-bottom: 0;">🎙️ Live Karaoke Sing-Along Studio</h3>
                 </div>
-                <p style="color: var(--text-sub); font-size: 0.9rem; margin-bottom: 12px;">Sing along using your device microphone while playing the instrumental backing track!</p>
+                <p style="color: var(--text-sub); font-size: 0.9rem; margin-bottom: 12px;">Or sing the entire song live yourself while playing the instrumental backing track!</p>
 
                 <div style="display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
                     <button id="toggleRecordBtn" class="download-btn primary" style="background: #22c55e; border: none; cursor: pointer;">🎙️ Start Recording</button>
@@ -274,7 +351,7 @@
                 </div>
 
                 <div id="mixingSection" style="display: none; margin-top: 16px; border-top: 1px dashed var(--border-color); padding-top: 14px;">
-                    <h4 style="margin-bottom: 8px; font-size: 1rem; color: #f472b6;">🎉 Your Final Song (Your Voice + Karaoke)</h4>
+                    <h4 style="margin-bottom: 8px; font-size: 1rem; color: #f472b6;">🎉 Your Final Song (Live Voice + Karaoke)</h4>
                     <audio id="mixedAudio" controls></audio>
                     <a id="downloadMixed" class="download-btn primary" style="background: #22c55e; margin-top: 10px;" download>
                         ⬇️ Download Final Song MP3
@@ -293,7 +370,29 @@
             </div>
         </div>
 
-        <div class="gallery-section" id="gallerySection" style="margin-top: 40px; border-top: 1px solid var(--border-color); padding-top: 24px;">
+        <!-- Folder Library: .ignored/songs & .ignored/vsp_voice -->
+        <div class="gallery-section" id="localLibrarySection" style="margin-top: 36px; border-top: 1px solid var(--border-color); padding-top: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div>
+                    <h2 style="font-size: 1.35rem; color: #38bdf8; font-weight: 600;">📂 Folder Songs & Voice Library</h2>
+                    <p style="font-size: 0.85rem; color: var(--text-sub); margin-top: 2px;">
+                        Songs from <code>.ignored/songs/</code> &amp; Voice from <code>.ignored/vsp_voice/</code>
+                    </p>
+                </div>
+                <button id="refreshLibraryBtn" style="background: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); color: #e2e8f0; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">🔄 Refresh</button>
+            </div>
+
+            <div id="activeVoiceBanner" style="margin-bottom: 16px; padding: 12px 14px; border-radius: 12px; background: rgba(12, 74, 110, 0.3); border: 1px solid rgba(56, 189, 248, 0.3); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <span id="activeVoiceText" style="font-size: 0.9rem; color: #bae6fd;">🎙️ Active Voice: Loading...</span>
+                <audio id="activeVoiceBannerAudio" controls style="height: 32px; max-width: 260px;"></audio>
+            </div>
+
+            <div id="localSongsContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+                <!-- Populated from /api/library -->
+            </div>
+        </div>
+
+        <div class="gallery-section" id="gallerySection" style="margin-top: 32px; border-top: 1px solid var(--border-color); padding-top: 24px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <h2 style="font-size: 1.4rem; color: #f8fafc; font-weight: 600;">📚 Extracted Karaoke Gallery</h2>
                 <button id="refreshGalleryBtn" style="background: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); color: #e2e8f0; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">🔄 Refresh</button>
@@ -318,6 +417,7 @@
         const fileInfo = document.getElementById('fileInfo');
         const processBtn = document.getElementById('processBtn');
         const progressSection = document.getElementById('progressSection');
+        const progressText = document.getElementById('progressText');
         const resultSection = document.getElementById('resultSection');
         const statusMsg = document.getElementById('statusMsg');
         
@@ -383,7 +483,6 @@
         });
 
         processBtn.addEventListener('click', async () => {
-            console.log("Process button clicked. Sending file to /api/process...");
             if (!selectedFile) {
                 alert("Please select an audio file first!");
                 return;
@@ -392,8 +491,8 @@
             const formData = new FormData();
             formData.append('file', selectedFile);
 
-            // Reset view UI
             processBtn.disabled = true;
+            progressText.textContent = 'Extracting Karaoke Track with Deep Learning AI...';
             progressSection.style.display = 'block';
             resultSection.style.display = 'none';
             statusMsg.textContent = '';
@@ -405,19 +504,15 @@
                 });
 
                 const data = await response.json();
-                console.log("API response received:", data);
 
                 if (!response.ok) {
                     throw new Error(data.error || 'Failed to process audio file');
                 }
 
-                // Save current job_id
                 currentJobId = data.job_id;
-
                 const karaokeUrl = resolveApiUrl(data.karaoke_url);
                 const vocalsUrl = resolveApiUrl(data.vocals_url);
 
-                // Set Audio previews & download links
                 karaokeAudio.src = karaokeUrl;
                 if (vocalsAudio) vocalsAudio.src = vocalsUrl;
 
@@ -426,6 +521,8 @@
 
                 progressSection.style.display = 'none';
                 resultSection.style.display = 'block';
+                loadLibrary();
+                loadGallery();
             } catch (err) {
                 console.error("Error processing file:", err);
                 progressSection.style.display = 'none';
@@ -440,6 +537,147 @@
         let mediaRecorder = null;
         let audioChunks = [];
         let isCancelled = false;
+
+        // AI Voice Clone (Seed-VC) State & Elements
+        let voiceSampleBlob = null;
+        let voiceSampleFilename = 'voice_sample.webm';
+        let sampleRecorder = null;
+        let sampleChunks = [];
+        let availableVoices = [];
+
+        const savedVoiceSelect = document.getElementById('savedVoiceSelect');
+        const recordSampleBtn = document.getElementById('recordSampleBtn');
+        const voiceSampleInput = document.getElementById('voiceSampleInput');
+        const voiceSamplePreviewBox = document.getElementById('voiceSamplePreviewBox');
+        const voiceSampleLabel = document.getElementById('voiceSampleLabel');
+        const voiceSampleAudio = document.getElementById('voiceSampleAudio');
+        const pitchShiftSelect = document.getElementById('pitchShiftSelect');
+        const diffusionStepsSelect = document.getElementById('diffusionStepsSelect');
+        const generateAiCoverBtn = document.getElementById('generateAiCoverBtn');
+        const aiCoverStatus = document.getElementById('aiCoverStatus');
+        const aiCoverResultBox = document.getElementById('aiCoverResultBox');
+        const aiCoverAudio = document.getElementById('aiCoverAudio');
+        const downloadAiCover = document.getElementById('downloadAiCover');
+        const downloadAiVocals = document.getElementById('downloadAiVocals');
+
+        savedVoiceSelect.addEventListener('change', () => {
+            const chosen = savedVoiceSelect.value;
+            if (chosen) {
+                // Using a saved file from .ignored/vsp_voice/
+                voiceSampleBlob = null;
+                const voiceObj = availableVoices.find(v => v.filename === chosen);
+                if (voiceObj) {
+                    voiceSampleAudio.src = resolveApiUrl(voiceObj.url);
+                    voiceSampleLabel.textContent = `✅ Using saved voice: .ignored/vsp_voice/${voiceObj.filename}`;
+                    voiceSamplePreviewBox.style.display = 'block';
+                }
+            }
+        });
+
+        recordSampleBtn.addEventListener('click', async () => {
+            if (sampleRecorder && sampleRecorder.state === 'recording') {
+                sampleRecorder.stop();
+                if (sampleRecorder.stream) {
+                    sampleRecorder.stream.getTracks().forEach(t => t.stop());
+                }
+                recordSampleBtn.textContent = '🎙️ Or Record 15s Voice Sample';
+                recordSampleBtn.style.background = '#0284c7';
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                sampleRecorder = new MediaRecorder(stream);
+                sampleChunks = [];
+
+                sampleRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) sampleChunks.push(e.data);
+                };
+
+                sampleRecorder.onstop = () => {
+                    voiceSampleBlob = new Blob(sampleChunks, { type: 'audio/webm' });
+                    voiceSampleFilename = 'recorded_voice_sample.webm';
+                    savedVoiceSelect.value = '';
+                    voiceSampleAudio.src = URL.createObjectURL(voiceSampleBlob);
+                    voiceSampleLabel.textContent = '✅ Custom recorded voice sample ready';
+                    voiceSamplePreviewBox.style.display = 'block';
+                    recordSampleBtn.textContent = '🎙️ Re-record Voice Sample';
+                    recordSampleBtn.style.background = '#0284c7';
+                };
+
+                sampleRecorder.start();
+                recordSampleBtn.textContent = '⏹️ Stop Sample Recording';
+                recordSampleBtn.style.background = '#ef4444';
+            } catch (err) {
+                alert("Microphone access denied or unavailable: " + err.message);
+            }
+        });
+
+        voiceSampleInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                const file = e.target.files[0];
+                voiceSampleBlob = file;
+                voiceSampleFilename = file.name;
+                savedVoiceSelect.value = '';
+                voiceSampleAudio.src = URL.createObjectURL(file);
+                voiceSampleLabel.textContent = `✅ Custom uploaded voice sample: ${file.name}`;
+                voiceSamplePreviewBox.style.display = 'block';
+            }
+        });
+
+        generateAiCoverBtn.addEventListener('click', async () => {
+            if (!currentJobId) {
+                alert("Please select or extract a song first!");
+                return;
+            }
+            const chosenSavedVoice = savedVoiceSelect.value;
+            if (!voiceSampleBlob && !chosenSavedVoice) {
+                alert("Please select a saved voice from .ignored/vsp_voice or record/upload a voice sample!");
+                return;
+            }
+
+            generateAiCoverBtn.disabled = true;
+            aiCoverStatus.style.display = 'block';
+            aiCoverStatus.textContent = '⏳ Running Seed-VC AI Voice Conversion... (First run downloads model weights; CPU conversion takes ~1–3 mins)';
+            aiCoverResultBox.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('job_id', currentJobId);
+            if (voiceSampleBlob) {
+                formData.append('user_voice', voiceSampleBlob, voiceSampleFilename);
+            } else {
+                formData.append('voice_filename', chosenSavedVoice);
+            }
+            formData.append('pitch_shift', pitchShiftSelect.value);
+            formData.append('diffusion_steps', diffusionStepsSelect.value);
+
+            try {
+                const res = await fetch(resolveApiUrl('/api/ai-cover'), {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.details ? `${data.error}: ${data.details}` : (data.error || 'AI voice conversion failed'));
+                }
+
+                const coverUrl = resolveApiUrl(data.ai_cover_url);
+                const aiVocalsUrl = resolveApiUrl(data.ai_vocals_url);
+
+                aiCoverAudio.src = coverUrl;
+                downloadAiCover.href = coverUrl;
+                downloadAiVocals.href = aiVocalsUrl;
+
+                aiCoverResultBox.style.display = 'block';
+                aiCoverStatus.textContent = '✅ AI Song Cover in your voice is ready!';
+            } catch (err) {
+                console.error("AI Cover error:", err);
+                aiCoverStatus.textContent = '❌ Error: ' + err.message;
+            } finally {
+                generateAiCoverBtn.disabled = false;
+            }
+        });
 
         const toggleRecordBtn = document.getElementById('toggleRecordBtn');
         const cancelRecordBtn = document.getElementById('cancelRecordBtn');
@@ -563,14 +801,185 @@
             cancelRecordBtn.style.display = 'none';
         }
 
-        // Gallery Fetch & Select Logic
+        // Gallery & Local Folder Library Logic
         const galleryContainer = document.getElementById('galleryContainer');
         const refreshGalleryBtn = document.getElementById('refreshGalleryBtn');
+        const localLibrarySection = document.getElementById('localLibrarySection');
+        const localSongsContainer = document.getElementById('localSongsContainer');
+        const refreshLibraryBtn = document.getElementById('refreshLibraryBtn');
+        const activeVoiceText = document.getElementById('activeVoiceText');
+        const activeVoiceBannerAudio = document.getElementById('activeVoiceBannerAudio');
+        const gallerySection = document.getElementById('gallerySection');
+        const backToGalleryBtn = document.getElementById('backToGalleryBtn');
 
         function escapeHtml(text) {
             if (!text) return '';
             return text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
         }
+
+        async function loadLibrary() {
+            try {
+                const res = await fetch(resolveApiUrl('/api/library'));
+                const data = await res.json();
+                if (!res.ok) return;
+
+                availableVoices = data.voices || [];
+                savedVoiceSelect.innerHTML = '';
+
+                if (availableVoices.length > 0) {
+                    availableVoices.forEach((v, idx) => {
+                        const opt = document.createElement('option');
+                        opt.value = v.filename;
+                        opt.textContent = `🎙️ ${v.filename} (${v.size_mb} MB — from .ignored/vsp_voice)`;
+                        if (idx === 0) opt.selected = true;
+                        savedVoiceSelect.appendChild(opt);
+                    });
+                    const customOpt = document.createElement('option');
+                    customOpt.value = '';
+                    customOpt.textContent = 'Custom Recorded / Uploaded Voice';
+                    savedVoiceSelect.appendChild(customOpt);
+
+                    const defaultVoice = availableVoices[0];
+                    const defaultVoiceUrl = resolveApiUrl(defaultVoice.url);
+                    activeVoiceText.innerHTML = `🎙️ Saved Voice Ready: <strong>${escapeHtml(defaultVoice.filename)}</strong>`;
+                    activeVoiceBannerAudio.src = defaultVoiceUrl;
+                    activeVoiceBannerAudio.style.display = 'block';
+
+                    if (!voiceSampleBlob) {
+                        voiceSampleAudio.src = defaultVoiceUrl;
+                        voiceSampleLabel.textContent = `✅ Using saved voice: .ignored/vsp_voice/${defaultVoice.filename}`;
+                        voiceSamplePreviewBox.style.display = 'block';
+                    }
+                } else {
+                    savedVoiceSelect.innerHTML = '<option value="">No voice files in .ignored/vsp_voice (Record or Upload below)</option>';
+                    activeVoiceText.textContent = '⚠️ No voice file found in .ignored/vsp_voice/';
+                    activeVoiceBannerAudio.style.display = 'none';
+                }
+
+                localSongsContainer.innerHTML = '';
+                const songs = data.songs || [];
+                if (songs.length === 0) {
+                    localSongsContainer.innerHTML = '<p style="color: var(--text-sub); grid-column: 1/-1; text-align: center;">No songs found in .ignored/songs/.</p>';
+                    return;
+                }
+
+                songs.forEach(song => {
+                    const card = document.createElement('div');
+                    card.className = 'result-card';
+                    card.style.margin = '0';
+                    card.style.display = 'flex';
+                    card.style.flexDirection = 'column';
+                    card.style.justifyContent = 'space-between';
+                    card.style.border = '1px solid rgba(56, 189, 248, 0.35)';
+
+                    const statusBadge = song.has_ai_cover
+                        ? '<span style="color: #4ade80; font-size: 0.78rem;">✅ AI Cover &amp; Karaoke Ready</span>'
+                        : (song.is_extracted
+                            ? '<span style="color: #38bdf8; font-size: 0.78rem;">✅ Stems Extracted</span>'
+                            : '<span style="color: var(--text-sub); font-size: 0.78rem;">📦 Ready in .ignored/songs</span>');
+
+                    card.innerHTML = `
+                        <div>
+                            <h4 style="color: #38bdf8; font-size: 1rem; margin-bottom: 4px; word-break: break-all;">🎵 ${escapeHtml(song.filename)}</h4>
+                            <p style="color: var(--text-sub); font-size: 0.8rem; margin-bottom: 6px;">Size: ${song.size_mb} MB</p>
+                            <div style="margin-bottom: 12px;">${statusBadge}</div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <button class="download-btn primary" onclick="oneClickAiCoverFromFolder('${escapeHtml(song.filename)}')" style="background: linear-gradient(135deg, #0284c7 0%, #7c3aed 100%); border: none; cursor: pointer; text-align: center; justify-content: center;">
+                                ✨ Generate Song in My Voice
+                            </button>
+                            <button class="download-btn" onclick="openOrExtractLocalSong('${escapeHtml(song.filename)}')" style="border: 1px solid var(--border-color); cursor: pointer; text-align: center; justify-content: center;">
+                                🎤 ${song.is_extracted ? 'Open Studio & Preview' : 'Extract Karaoke Only'}
+                            </button>
+                        </div>
+                    `;
+                    localSongsContainer.appendChild(card);
+                });
+            } catch (err) {
+                console.error("Failed to load folder library:", err);
+            }
+        }
+
+        window.openOrExtractLocalSong = async function(songFilename) {
+            progressText.textContent = `Extracting Karaoke & Vocal Stems for "${songFilename}"...`;
+            progressSection.style.display = 'block';
+            statusMsg.textContent = '';
+
+            try {
+                const res = await fetch(resolveApiUrl('/api/process-local-song'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ song_filename: songFilename })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.details ? `${data.error}: ${data.details}` : (data.error || 'Failed to process song'));
+                }
+
+                progressSection.style.display = 'none';
+                await loadLibrary();
+                await loadGallery();
+                await window.selectTrackForKaraoke(
+                    data.job_id,
+                    data.filename,
+                    data.karaoke_url,
+                    data.ai_cover_url || '',
+                    data.ai_vocals_url || ''
+                );
+            } catch (err) {
+                progressSection.style.display = 'none';
+                statusMsg.textContent = 'Error: ' + err.message;
+            }
+        };
+
+        window.oneClickAiCoverFromFolder = async function(songFilename) {
+            const voiceToUse = savedVoiceSelect.value || (availableVoices[0] && availableVoices[0].filename) || '';
+            if (!voiceToUse && !voiceSampleBlob) {
+                alert("No voice found in .ignored/vsp_voice! Please add a voice file or record/upload one.");
+                return;
+            }
+
+            progressText.textContent = `Step 1/2: Separating vocals & music + Step 2/2: Cloning your voice (${voiceToUse || 'custom'}) onto "${songFilename}"...`;
+            progressSection.style.display = 'block';
+            statusMsg.textContent = '';
+
+            const formData = new FormData();
+            formData.append('song_filename', songFilename);
+            if (voiceToUse) {
+                formData.append('voice_filename', voiceToUse);
+            } else if (voiceSampleBlob) {
+                formData.append('user_voice', voiceSampleBlob, voiceSampleFilename);
+            }
+            formData.append('pitch_shift', pitchShiftSelect.value || '0');
+            formData.append('diffusion_steps', diffusionStepsSelect.value || '10');
+
+            try {
+                const res = await fetch(resolveApiUrl('/api/ai-cover'), {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.details ? `${data.error}: ${data.details}` : (data.error || 'Failed to generate AI song cover'));
+                }
+
+                progressSection.style.display = 'none';
+                await loadLibrary();
+                await loadGallery();
+                await window.selectTrackForKaraoke(
+                    data.job_id,
+                    songFilename,
+                    data.karaoke_url,
+                    data.ai_cover_url,
+                    data.ai_vocals_url
+                );
+                aiCoverStatus.style.display = 'block';
+                aiCoverStatus.textContent = `✅ AI Song Cover for "${songFilename}" in your voice is ready!`;
+            } catch (err) {
+                progressSection.style.display = 'none';
+                statusMsg.textContent = 'Error: ' + err.message;
+            }
+        };
 
         async function loadGallery() {
             try {
@@ -581,7 +990,7 @@
 
                 galleryContainer.innerHTML = '';
                 if (!data.gallery || data.gallery.length === 0) {
-                    galleryContainer.innerHTML = '<p style="color: var(--text-sub); grid-column: 1/-1; text-align: center;">No extracted karaoke songs yet. Upload your first MP3 above!</p>';
+                    galleryContainer.innerHTML = '<p style="color: var(--text-sub); grid-column: 1/-1; text-align: center;">No extracted karaoke songs yet. Select a song from .ignored/songs above or upload an MP3!</p>';
                     return;
                 }
 
@@ -599,8 +1008,8 @@
                             <p style="color: var(--text-sub); font-size: 0.8rem; margin-bottom: 12px;">ID: ${item.job_id.substring(0, 8)}</p>
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <button class="download-btn primary" onclick="selectTrackForKaraoke('${item.job_id}', '${escapeHtml(item.song_name)}', '${item.karaoke_url}')" style="border: none; cursor: pointer; text-align: center; justify-content: center;">
-                                🎙️ Select & Sing With Track
+                            <button class="download-btn primary" onclick="selectTrackForKaraoke('${item.job_id}', '${escapeHtml(item.song_name)}', '${item.karaoke_url}', '${item.ai_cover_url || ''}', '${item.ai_vocals_url || ''}')" style="border: none; cursor: pointer; text-align: center; justify-content: center;">
+                                🎙️ Open Studio &amp; AI Voice Clone
                             </button>
                         </div>
                     `;
@@ -611,21 +1020,32 @@
             }
         }
 
-        const gallerySection = document.getElementById('gallerySection');
-        const headerContainer = document.querySelector('.header');
-        const backToGalleryBtn = document.getElementById('backToGalleryBtn');
-
-        window.selectTrackForKaraoke = async function(jobId, songName, karaokeUrl) {
+        window.selectTrackForKaraoke = async function(jobId, songName, karaokeUrl, existingAiCoverUrl = '', existingAiVocalsUrl = '') {
             const fullKaraokeUrl = resolveApiUrl(karaokeUrl);
             currentJobId = jobId;
             downloadKaraoke.href = fullKaraokeUrl;
 
             // Show Studio view, hide Upload box & Gallery list for zero distraction
             resultSection.style.display = 'block';
+            localLibrarySection.style.display = 'none';
             gallerySection.style.display = 'none';
             dropZone.style.display = 'none';
             processBtn.style.display = 'none';
             mixingSection.style.display = 'none';
+            aiCoverStatus.style.display = 'none';
+
+            if (existingAiCoverUrl) {
+                const fullAiCover = resolveApiUrl(existingAiCoverUrl);
+                aiCoverAudio.src = fullAiCover;
+                downloadAiCover.href = fullAiCover;
+                if (existingAiVocalsUrl) {
+                    downloadAiVocals.href = resolveApiUrl(existingAiVocalsUrl);
+                }
+                aiCoverResultBox.style.display = 'block';
+            } else {
+                aiCoverResultBox.style.display = 'none';
+            }
+
             statusMsg.textContent = '⏳ Loading song into memory...';
 
             // Scroll smoothly to Singer Studio card
@@ -645,20 +1065,23 @@
         };
 
         backToGalleryBtn.addEventListener('click', () => {
-            // Stop audio if playing
             karaokeAudio.pause();
+            aiCoverAudio.pause();
             
-            // Return to main gallery & upload view
             resultSection.style.display = 'none';
+            localLibrarySection.style.display = 'block';
             gallerySection.style.display = 'block';
             dropZone.style.display = 'block';
             processBtn.style.display = 'block';
+            loadLibrary();
             loadGallery();
         });
 
+        refreshLibraryBtn.addEventListener('click', loadLibrary);
         refreshGalleryBtn.addEventListener('click', loadGallery);
 
-        // Load gallery on page init
+        // Load folder library and gallery on page init
+        loadLibrary();
         loadGallery();
     </script>
 </body>
