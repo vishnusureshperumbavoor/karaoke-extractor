@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Karaoke & Instrumental Extractor</title>
+    <title>Vibe Rapper | AI Beat & Vocal Studio</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -226,8 +226,8 @@
 
     <div class="container">
         <div class="header">
-            <h1>Karaoke Extractor AI</h1>
-            <p>Upload any MP3 song to isolate vocals and extract pure Instrumental/Karaoke audio</p>
+            <h1>Vibe Rapper AI</h1>
+            <p>Upload any track to isolate beats, vocals, and generate instant AI covers</p>
         </div>
 
         <!-- Google Colab MCP GPU Acceleration Bar -->
@@ -267,12 +267,12 @@
             </div>
         </div>
 
-        <button class="btn-action" id="processBtn" disabled>Extract Karaoke Track</button>
+        <button class="btn-action" id="processBtn" disabled>Isolate Beat & Stems</button>
         <div class="status-msg" id="statusMsg"></div>
 
         <div class="progress-section" id="progressSection">
             <div class="spinner"></div>
-            <p id="progressText">Extracting Karaoke Track with Deep Learning AI...</p>
+            <p id="progressText">Isolating Beat & Stems with Deep Learning AI...</p>
             <p style="color: var(--text-sub); font-size: 0.85rem; margin-top: 6px;">This takes around 15–30 seconds depending on song length.</p>
         </div>
 
@@ -357,9 +357,9 @@
             <!-- Live Karaoke Recording Studio Card -->
             <div class="result-card" style="border: 1px solid rgba(168, 85, 247, 0.4); background: rgba(88, 28, 135, 0.2);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-                    <h3 style="color: #c084fc; margin-bottom: 0;">🎙️ Live Karaoke Sing-Along Studio</h3>
+                    <h3 style="color: #c084fc; margin-bottom: 0;">🎙️ Live Rap & Sing-Along Studio</h3>
                 </div>
-                <p style="color: var(--text-sub); font-size: 0.9rem; margin-bottom: 12px;">Or sing the entire song live yourself while playing the instrumental backing track!</p>
+                <p style="color: var(--text-sub); font-size: 0.9rem; margin-bottom: 12px;">Or rap the entire track live yourself while playing the instrumental beat!</p>
 
                 <div style="display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
                     <button id="toggleRecordBtn" class="download-btn primary" style="background: #22c55e; border: none; cursor: pointer;">🎙️ Start Recording</button>
@@ -367,24 +367,24 @@
                 </div>
 
                 <div id="recordingStatus" style="font-size: 0.9rem; color: #38bdf8; display: none; margin-bottom: 8px;">
-                    ⏺️ Recording in progress... Sing into your microphone!
+                    ⏺️ Recording in progress... Spit your bars into your microphone!
                 </div>
 
                 <div id="mixingSection" style="display: none; margin-top: 16px; border-top: 1px dashed var(--border-color); padding-top: 14px;">
-                    <h4 style="margin-bottom: 8px; font-size: 1rem; color: #f472b6;">🎉 Your Final Song (Live Voice + Karaoke)</h4>
+                    <h4 style="margin-bottom: 8px; font-size: 1rem; color: #f472b6;">🎉 Your Final Track (Live Voice + Beat)</h4>
                     <audio id="mixedAudio" controls></audio>
                     <a id="downloadMixed" class="download-btn primary" style="background: #22c55e; margin-top: 10px;" download>
-                        ⬇️ Download Final Song MP3
+                        ⬇️ Download Final Track MP3
                     </a>
                 </div>
             </div>
 
             <div class="result-card" style="border: 1px solid rgba(34, 197, 94, 0.3);">
-                <h3>🎤 Karaoke Track (Instrumental Only)</h3>
+                <h3>🎤 Instrumental Beat Track</h3>
                 <audio id="karaokeAudio" controls preload="auto"></audio>
                 <div style="display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap;">
                     <a id="downloadKaraoke" class="download-btn primary" download>
-                        ⬇️ Download Karaoke MP3
+                        ⬇️ Download Instrumental Beat
                     </a>
                 </div>
             </div>
@@ -414,7 +414,7 @@
 
         <div class="gallery-section" id="gallerySection" style="margin-top: 32px; border-top: 1px solid var(--border-color); padding-top: 24px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h2 style="font-size: 1.4rem; color: #f8fafc; font-weight: 600;">📚 Extracted Karaoke Gallery</h2>
+                <h2 style="font-size: 1.4rem; color: #f8fafc; font-weight: 600;">📚 Vibe Rapper Track Gallery</h2>
                 <button id="refreshGalleryBtn" style="background: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); color: #e2e8f0; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">🔄 Refresh</button>
             </div>
             

@@ -6,9 +6,9 @@
 
 set -euo pipefail
 
-API="${KARAOKE_API:-http://localhost:5000}"
+API="${VIBE_RAPPER_API:-http://localhost:5000}"
 
-echo "Karaoke Extractor Colab API: $API"
+echo "Vibe Rapper Colab API: $API"
 echo
 curl -sS "$API/api/colab/status" | jq '{status, connected, gpu_info, message}' || {
   echo "Backend not reachable at $API — start ./backend_start first." >&2

@@ -1,4 +1,4 @@
-"""FastAPI Backend for Karaoke Extractor & AI Voice Studio powered by vspagent."""
+"""FastAPI Backend for Vibe Rapper Studio powered by vspagent."""
 
 import asyncio
 from contextlib import asynccontextmanager
@@ -178,7 +178,7 @@ async def lifespan(app: FastAPI):
     await internal_colab_client.disconnect()
 
 
-app = FastAPI(title="Karaoke Extractor & AI Voice Studio", lifespan=lifespan)
+app = FastAPI(title="Vibe Rapper Studio", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

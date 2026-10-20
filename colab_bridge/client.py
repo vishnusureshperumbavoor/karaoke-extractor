@@ -48,7 +48,7 @@ def _is_noisy_log_line(line: str) -> bool:
     return any(marker in line for marker in NOISY_LOG_MARKERS)
 
 
-class KaraokeColabClient(ColabMCPClient):
+class VibeRapperColabClient(ColabMCPClient):
     """Google Colab MCP Client subclassed from vspagent with audio processing pipelines."""
 
     async def run_demucs_on_colab(
@@ -328,5 +328,5 @@ print('STATUS_FAILED:', 1 if os.path.exists(FAIL_FLAG) else 0)
         await self.download_file_from_colab("/content/seedvc_job/ai_vocals.mp3", out_ai_vocals_mp3_path)
 
 
-# Persistent singleton for Karaoke Extractor
-internal_colab_client = KaraokeColabClient()
+# Persistent singleton for Vibe Rapper
+internal_colab_client = VibeRapperColabClient()

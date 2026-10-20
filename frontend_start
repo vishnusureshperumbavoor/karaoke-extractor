@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 
 echo "=========================================="
-echo "🎨 Starting Karaoke Extractor Frontend..."
+echo "🎨 Starting Vibe Rapper Frontend..."
 echo "🌐 Local URL:   http://localhost:${FRONTEND_PORT}"
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 if [ -n "$LOCAL_IP" ]; then

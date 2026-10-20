@@ -1,18 +1,18 @@
-# 🎤 Karaoke Extractor & Singer Studio AI
+# 🎤 Vibe Rapper — AI Vocal Stem Isolation & Voice Studio
 
-A modern, full-stack open-source web application that extracts pure instrumental/karaoke tracks from any MP3 song using Deep Learning AI ([Demucs](https://github.com/facebookresearch/demucs)), lets you sing along using your device microphone, and automatically mixes your recorded voice with the backing track into a downloadable final song!
+A modern, full-stack open-source AI web studio that isolates pure instrumental beats and rap/vocal stems from any audio track using Deep Learning AI ([Demucs](https://github.com/facebookresearch/demucs)), lets you record and spit bars live over the beat, and generates instant zero-shot AI voice conversions and song covers powered by **`vspagent`** Google Colab MCP agent orchestration!
 
 ---
 
 ## 🌟 Key Features
 
-- **🤖 AI Instrumental Separation**: Uses Meta Research's **Demucs (htdemucs)** deep learning model to separate vocal and instrumental stems offline for free.
-- **🗣️ Zero-Shot AI Voice Clone Cover (Seed-VC)**: Upload or record just **10–25 seconds of your voice**, and **Seed-VC** converts the original singer's vocals into your voice (preserving melody and pitch) and mixes it with the instrumental track!
-- **🎙️ Live Karaoke Studio**: Sing along in real-time using your mobile phone or laptop microphone while the instrumental backing track plays out loud.
-- **🎛️ Auto Audio Mixing**: Powered by **FFmpeg**, automatically blends your recorded or AI-cloned voice with the backing track into a studio-grade combined MP3.
-- **📚 Extracted Song Gallery**: Keeps a persistent local gallery of all your previously extracted songs for quick selection and re-singing.
-- **📱 Focused Mobile UI**: Zero-distraction singer view with green **Start Recording** / red **Stop & Mix** single toggle button and an instant **Cancel** option.
-- **🔒 100% Free & Local**: No paid APIs, no subscriptions, and no cloud data uploads required. All storage is kept locally inside a `.ignored/` folder.
+- **🤖 AI Beat & Vocal Stem Separation**: Uses Meta Research's **Demucs (htdemucs)** deep learning model to isolate vocal and instrumental stems offline for free or on Colab GPU.
+- **🗣️ Zero-Shot AI Voice Clone Covers (Seed-VC)**: Upload or record just **10–25 seconds of your voice**, and **Seed-VC** converts vocals into your custom voice (preserving rhythm, inflection, and pitch) and mixes it with the beat!
+- **🎙️ Live Rap Recording Studio**: Record live vocals and spit bars in real-time over the instrumental beat while monitoring your backing track.
+- **🎛️ Auto Audio Mixing**: Powered by **FFmpeg**, automatically blends your recorded or AI-cloned voice with the beat into a studio-grade combined MP3.
+- **📚 Vibe Rapper Track Gallery**: Persistent local gallery of all your previously extracted beats and covers for instant selection and playback.
+- **⚡ Colab MCP Cloud GPU**: Offload Demucs separation and Seed-VC conversion to Google Colab GPUs with zero local VRAM using **`vspagent`**.
+- **📱 Focused Mobile UI**: Zero-distraction studio view with streamlined **Start Recording** / **Stop & Mix** controls.
 
 ---
 
@@ -43,8 +43,8 @@ Clone the repository and set up the Python virtual environment:
 
 ```bash
 # Clone the repository
-git clone https://github.com/vishnusureshperumbavoor/karaoke-extractor.git
-cd karaoke-extractor
+git clone https://github.com/vishnusureshperumbavoor/vibe-singer.git
+cd vibe-singer
 
 # Create virtual environment
 python3 -m venv venv
@@ -102,7 +102,7 @@ To record your voice over local Wi-Fi (`http://<YOUR_LOCAL_IP>:3000` or `http://
 ## 📁 Project Structure
 
 ```
-karaoke-extractor/
+vibe-rapper/
 ├── app.py                 # FastAPI backend server (/api/library, /api/colab/*, /api/process, /api/ai-cover, /api/mix)
 ├── colab_bridge/          # Google Colab MCP bridge powered by vspagent
 ├── colab_start            # Interactive CLI script to pair a Chrome profile with Google Colab GPU
