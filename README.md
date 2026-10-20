@@ -18,7 +18,7 @@ A modern, full-stack open-source web application that extracts pure instrumental
 
 ## 🛠️ Tech Stack
 
-- **Backend**: Python 3.12, Flask, Flask-CORS
+- **Backend**: Python 3.12, FastAPI, Uvicorn, vspagent
 - **Audio & AI Processing Engine**: PyTorch, Demucs (`htdemucs`), Seed-VC (`U-DiT` + `RMVPE` + `BigVGAN`), FFmpeg
 - **Frontend**: HTML5, Vanilla CSS (Glassmorphism & Outfit Font), Web Audio / MediaRecorder API
 - **Version Control**: Git, GitHub
@@ -54,7 +54,7 @@ source venv/bin/activate
 
 # Install dependencies
 pip install --upgrade pip setuptools wheel
-pip install flask flask-cors demucs torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cpu
+pip install fastapi uvicorn python-multipart vspagent demucs torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cpu
 pip install librosa scipy munch huggingface-hub transformers accelerate soundfile pyyaml
 ```
 
@@ -103,10 +103,10 @@ To record your voice over local Wi-Fi (`http://<YOUR_LOCAL_IP>:3000` or `http://
 
 ```
 karaoke-extractor/
-├── app.py                 # Flask backend server (/api/library, /api/colab/*, /api/process, /api/ai-cover, /api/mix)
-├── colab_bridge/          # Google Colab MCP bridge (client.py, chrome_profiles.py, chrome_launcher.py)
+├── app.py                 # FastAPI backend server (/api/library, /api/colab/*, /api/process, /api/ai-cover, /api/mix)
+├── colab_bridge/          # Google Colab MCP bridge powered by vspagent
 ├── colab_start            # Interactive CLI script to pair a Chrome profile with Google Colab GPU
-├── backend_start          # Shell script to launch the Flask backend server (port 5000)
+├── backend_start          # Shell script to launch the FastAPI backend server (port 5000)
 ├── frontend_start         # Shell script to launch the frontend static server (port 3000)
 ├── static/
 │   └── index.html         # Single-page web UI, Colab GPU bar, Folder Library & AI Voice Clone Studio

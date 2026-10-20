@@ -1,22 +1,21 @@
+"""FastAPI Backend for Karaoke Extractor & AI Voice Studio powered by vspagent."""
+
+import asyncio
+from contextlib import asynccontextmanager
 import logging
 import os
 import shutil
 import subprocess
 import uuid
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
+from typing import Optional
+
+from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException, Query, Body
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+
 from colab_bridge import internal_colab_client, list_chrome_accounts
-
-
-class _SuppressColabStatusPoll(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        return "GET /api/colab/status" not in record.getMessage()
-
-
-logging.getLogger("werkzeug").addFilter(_SuppressColabStatusPoll())
-
-app = Flask(__name__, static_folder="static", static_url_path="")
-CORS(app)
 
 BASE_IGNORED_DIR = os.path.abspath(".ignored")
 UPLOAD_FOLDER = os.path.join(BASE_IGNORED_DIR, "uploads")
@@ -24,6 +23,7 @@ PROCESSED_FOLDER = os.path.join(BASE_IGNORED_DIR, "processed")
 SONGS_FOLDER = os.path.join(BASE_IGNORED_DIR, "songs")
 VOICE_FOLDER = os.path.join(BASE_IGNORED_DIR, "vsp_voice")
 SEED_VC_DIR = os.path.join(BASE_IGNORED_DIR, "seed-vc")
+STATIC_FOLDER = os.path.abspath("static")
 
 for folder in [UPLOAD_FOLDER, PROCESSED_FOLDER, SONGS_FOLDER, VOICE_FOLDER]:
     os.makedirs(folder, exist_ok=True)
@@ -94,7 +94,7 @@ def ensure_seed_vc_ready():
     return inference_script
 
 
-def find_existing_job_for_song(song_name):
+def find_existing_job_for_song(song_name: str) -> Optional[str]:
     """Return existing job_id if a song with song_name was already separated by Demucs."""
     if not os.path.exists(PROCESSED_FOLDER):
         return None
@@ -110,22 +110,26 @@ def find_existing_job_for_song(song_name):
     return None
 
 
-def separate_song_file(source_file_path, original_filename, use_colab=None):
-    """Convert any audio/mpeg file to MP3 and run Demucs stem separation (on Colab GPU if connected, else local CPU)."""
+async def separate_song_file(source_file_path: str, original_filename: str, use_colab: Optional[bool] = None) -> str:
+    """Convert any audio file to MP3 and run Demucs stem separation (on Colab GPU if connected, else local CPU)."""
     job_id = str(uuid.uuid4())
     job_dir = os.path.join(UPLOAD_FOLDER, job_id)
     os.makedirs(job_dir, exist_ok=True)
 
     input_path = os.path.join(job_dir, "input.mp3")
-    subprocess.run([
-        "ffmpeg", "-y",
-        "-i", source_file_path,
-        "-vn",
-        "-ar", "44100",
-        "-ac", "2",
-        "-b:a", "192k",
-        input_path
-    ], capture_output=True, text=True, check=True)
+    await asyncio.to_thread(
+        subprocess.run,
+        [
+            "ffmpeg", "-y",
+            "-i", source_file_path,
+            "-vn",
+            "-ar", "44100",
+            "-ac", "2",
+            "-b:a", "192k",
+            input_path
+        ],
+        capture_output=True, text=True, check=True
+    )
 
     out_dir = os.path.join(PROCESSED_FOLDER, job_id)
     os.makedirs(out_dir, exist_ok=True)
@@ -144,9 +148,7 @@ def separate_song_file(source_file_path, original_filename, use_colab=None):
     )
 
     if should_use_colab and internal_colab_client.status == "connected":
-        internal_colab_client.run_sync(
-            internal_colab_client.run_demucs_on_colab(input_path, vocals_path, karaoke_path)
-        )
+        await internal_colab_client.run_demucs_on_colab(input_path, vocals_path, karaoke_path)
     else:
         cmd = [
             os.path.abspath("./venv/bin/demucs"),
@@ -156,7 +158,7 @@ def separate_song_file(source_file_path, original_filename, use_colab=None):
             "-o", out_dir,
             input_path
         ]
-        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, check=True)
 
     if not os.path.exists(karaoke_path):
         raise RuntimeError("Failed to generate karaoke audio track")
@@ -164,10 +166,35 @@ def separate_song_file(source_file_path, original_filename, use_colab=None):
     return job_id
 
 
-@app.route("/api/colab/status", methods=["GET"])
-def colab_status():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    try:
+        ensure_seed_vc_ready()
+    except Exception as e:
+        print("Warning initializing Seed-VC:", e)
+    yield
+    # Shutdown
+    await internal_colab_client.disconnect()
+
+
+app = FastAPI(title="Karaoke Extractor & AI Voice Studio", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# --- Google Colab MCP Endpoints ---
+
+@app.get("/api/colab/status")
+async def colab_status():
     """Returns the internal Google Colab MCP daemon status."""
-    return jsonify({
+    return {
         "status": internal_colab_client.status,
         "message": internal_colab_client.status_message,
         "gpu_info": internal_colab_client.gpu_info,
@@ -176,57 +203,53 @@ def colab_status():
         "connected": internal_colab_client.status == "connected",
         "colabAvailable": internal_colab_client.status == "connected",
         "recent_logs": list(internal_colab_client.logs)[-25:],
-    })
+    }
 
 
-@app.route("/api/colab/accounts", methods=["GET"])
-def colab_accounts():
+@app.get("/api/colab/accounts")
+async def colab_accounts():
     """List Chrome profiles / Gmail accounts available on this machine."""
-    payload = list_chrome_accounts()
-    return jsonify(payload)
+    return list_chrome_accounts()
 
 
-@app.route("/api/colab/connect", methods=["POST"])
-def colab_connect():
+@app.post("/api/colab/connect")
+async def colab_connect(request: Request):
     """Triggers pairing with Google Colab tab in the selected Chrome profile."""
-    data = request.get_json(silent=True) or {}
-    profile = request.args.get("profileDirectory") or data.get("profileDirectory")
-    force = str(request.args.get("force") or data.get("force", "false")).lower() == "true"
+    body = {}
     try:
-        res = internal_colab_client.run_sync(
-            internal_colab_client.connect_browser(profile_directory=profile, force=force),
-            timeout=60.0,
-        )
-        return jsonify(res)
+        body = await request.json()
+    except Exception:
+        pass
+    profile = request.query_params.get("profileDirectory") or body.get("profileDirectory")
+    force = str(request.query_params.get("force") or body.get("force", "false")).lower() == "true"
+    try:
+        return await internal_colab_client.connect_browser(profile_directory=profile, force=force)
     except Exception as e:
-        return jsonify({"status": "error", "connected": False, "message": str(e)}), 500
+        return JSONResponse(status_code=500, content={"status": "error", "connected": False, "message": str(e)})
 
 
-@app.route("/api/colab/execute", methods=["POST"])
-def colab_execute():
+@app.post("/api/colab/execute")
+async def colab_execute(request: Request):
     """Executes Python code in Google Colab Cloud GPU."""
-    data = request.get_json(silent=True) or {}
-    code = data.get("code", "")
-    keep_cell = bool(data.get("keep_cell", True))
-    if not code.strip():
-        return jsonify({"error": "Code cannot be empty"}), 400
+    body = {}
     try:
-        res = internal_colab_client.run_sync(
-            internal_colab_client.execute_code(code, keep_cell=keep_cell)
-        )
-        return jsonify(res)
+        body = await request.json()
+    except Exception:
+        pass
+    code = body.get("code", "")
+    keep_cell = bool(body.get("keep_cell", True))
+    if not code.strip():
+        raise HTTPException(status_code=400, detail="Code cannot be empty")
+    try:
+        return await internal_colab_client.execute_code(code, keep_cell=keep_cell)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.route("/")
-def index():
-    return send_from_directory("static", "index.html")
+# --- Library & Voices ---
 
-
-
-@app.route("/api/library", methods=["GET"])
-def list_library():
+@app.get("/api/library")
+async def list_library():
     """List songs from .ignored/songs and voice samples from .ignored/vsp_voice."""
     songs = []
     if os.path.exists(SONGS_FOLDER):
@@ -270,15 +293,15 @@ def list_library():
                     "url": f"/api/voices/{fname}"
                 })
 
-    return jsonify({"songs": songs, "voices": voices})
+    return {"songs": songs, "voices": voices}
 
 
-@app.route("/api/voices/<path:filename>")
-def download_voice_sample(filename):
+@app.get("/api/voices/{filename:path}")
+async def download_voice_sample(filename: str):
     safe_name = os.path.basename(filename)
     target = os.path.join(VOICE_FOLDER, safe_name)
     if not os.path.exists(target):
-        return jsonify({"error": "Voice file not found"}), 404
+        raise HTTPException(status_code=404, detail="Voice file not found")
 
     if not safe_name.lower().endswith((".mp3", ".wav")):
         preview_dir = os.path.join(BASE_IGNORED_DIR, "voice_previews")
@@ -286,32 +309,39 @@ def download_voice_sample(filename):
         preview_name = f"{os.path.splitext(safe_name)[0]}.mp3"
         preview_path = os.path.join(preview_dir, preview_name)
         if not os.path.exists(preview_path):
-            subprocess.run([
-                "ffmpeg", "-y", "-i", target, "-vn", "-ar", "44100", "-ac", "1", "-b:a", "192k", preview_path
-            ], capture_output=True, check=False)
+            await asyncio.to_thread(
+                subprocess.run,
+                ["ffmpeg", "-y", "-i", target, "-vn", "-ar", "44100", "-ac", "1", "-b:a", "192k", preview_path],
+                capture_output=True, check=False
+            )
         if os.path.exists(preview_path):
-            return send_from_directory(preview_dir, preview_name)
+            return FileResponse(preview_path)
 
-    return send_from_directory(VOICE_FOLDER, safe_name)
+    return FileResponse(target)
 
 
-@app.route("/api/process-local-song", methods=["POST"])
-def process_local_song():
+@app.post("/api/process-local-song")
+async def process_local_song(request: Request):
     """Extract instrumental & vocals for a song stored in .ignored/songs/."""
-    data = request.get_json(silent=True) or request.form
-    song_filename = data.get("song_filename")
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        body = dict(await request.form())
+
+    song_filename = body.get("song_filename")
     if not song_filename:
-        return jsonify({"error": "Missing song_filename"}), 400
+        raise HTTPException(status_code=400, detail="Missing song_filename")
 
     safe_name = os.path.basename(song_filename)
     song_path = os.path.join(SONGS_FOLDER, safe_name)
     if not os.path.exists(song_path):
-        return jsonify({"error": f"Song '{safe_name}' not found in .ignored/songs"}), 404
+        raise HTTPException(status_code=404, detail=f"Song '{safe_name}' not found in .ignored/songs")
 
     existing_job_id = find_existing_job_for_song(safe_name)
     if existing_job_id:
         job_dir = os.path.join(PROCESSED_FOLDER, existing_job_id)
-        return jsonify({
+        return {
             "job_id": existing_job_id,
             "filename": safe_name,
             "karaoke_url": f"/api/download/{existing_job_id}/no_vocals.mp3",
@@ -319,61 +349,57 @@ def process_local_song():
             "ai_cover_url": f"/api/download/{existing_job_id}/ai_cover_song.mp3" if os.path.exists(os.path.join(job_dir, "ai_cover_song.mp3")) else None,
             "ai_vocals_url": f"/api/download/{existing_job_id}/ai_vocals.mp3" if os.path.exists(os.path.join(job_dir, "ai_vocals.mp3")) else None,
             "message": "Loaded previously separated tracks!"
-        })
+        }
 
     try:
-        job_id = separate_song_file(song_path, safe_name)
-        return jsonify({
+        job_id = await separate_song_file(song_path, safe_name)
+        return {
             "job_id": job_id,
             "filename": safe_name,
             "karaoke_url": f"/api/download/{job_id}/no_vocals.mp3",
             "vocals_url": f"/api/download/{job_id}/vocals.mp3",
             "message": "Karaoke track separated successfully!"
-        })
+        }
     except subprocess.CalledProcessError as e:
-        print("Demucs/FFmpeg Error Output:", e.stderr)
-        return jsonify({"error": "Audio separation failed", "details": e.stderr}), 500
+        raise HTTPException(status_code=500, detail={"error": "Audio separation failed", "details": e.stderr})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.route("/api/process", methods=["POST"])
-def process_audio():
-    if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
-
-    file = request.files["file"]
-    if file.filename == "":
-        return jsonify({"error": "No file selected"}), 400
-
-    original_filename = file.filename
+@app.post("/api/process")
+async def process_audio(file: UploadFile = File(...)):
+    """Upload audio file and separate into stems."""
+    original_filename = file.filename or "uploaded_song.mp3"
     raw_ext = os.path.splitext(original_filename)[1] or ".mp3"
     temp_dir = os.path.join(UPLOAD_FOLDER, "temp")
     os.makedirs(temp_dir, exist_ok=True)
     raw_path = os.path.join(temp_dir, f"{uuid.uuid4()}{raw_ext}")
-    file.save(raw_path)
+
+    content = await file.read()
+    with open(raw_path, "wb") as f:
+        f.write(content)
 
     try:
-        job_id = separate_song_file(raw_path, original_filename)
-        return jsonify({
+        job_id = await separate_song_file(raw_path, original_filename)
+        return {
             "job_id": job_id,
             "filename": original_filename,
             "karaoke_url": f"/api/download/{job_id}/no_vocals.mp3",
             "vocals_url": f"/api/download/{job_id}/vocals.mp3",
             "message": "Karaoke track separated successfully!"
-        })
+        }
     except subprocess.CalledProcessError as e:
-        print("Demucs Error Output:", e.stderr)
-        return jsonify({"error": "Demucs audio separation failed", "details": e.stderr}), 500
+        raise HTTPException(status_code=500, detail={"error": "Demucs audio separation failed", "details": e.stderr})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if os.path.exists(raw_path):
             os.remove(raw_path)
 
 
-@app.route("/api/gallery", methods=["GET"])
-def list_gallery():
+@app.get("/api/gallery")
+async def list_gallery():
+    """List completed karaoke projects and recordings."""
     gallery = []
     if os.path.exists(PROCESSED_FOLDER):
         for job_id in os.listdir(PROCESSED_FOLDER):
@@ -385,7 +411,7 @@ def list_gallery():
                 if os.path.exists(meta_path):
                     with open(meta_path, "r", encoding="utf-8") as f:
                         song_name = f.read().strip()
-                
+
                 mixed_path = os.path.join(job_dir, "final_song.mp3")
                 ai_cover_path = os.path.join(job_dir, "ai_cover_song.mp3")
                 gallery.append({
@@ -400,11 +426,12 @@ def list_gallery():
                     "ai_vocals_url": f"/api/download/{job_id}/ai_vocals.mp3" if os.path.exists(os.path.join(job_dir, "ai_vocals.mp3")) else None
                 })
 
-    return jsonify({"gallery": gallery})
+    return {"gallery": gallery}
 
 
-@app.route("/api/download/<job_id>/<filename>")
-def download_file(job_id, filename):
+@app.get("/api/download/{job_id}/{filename}")
+async def download_file(job_id: str, filename: str):
+    """Download audio file assets."""
     allowed_files = [
         "no_vocals.mp3",
         "vocals.mp3",
@@ -414,38 +441,39 @@ def download_file(job_id, filename):
         "ai_vocals.mp3"
     ]
     if filename not in allowed_files:
-        return jsonify({"error": "Invalid file request"}), 400
-    
-    file_path = os.path.join(PROCESSED_FOLDER, job_id, "htdemucs", "input")
-    if not os.path.exists(os.path.join(file_path, filename)):
-        # Check root job processed dir for mixed/AI outputs
-        file_path = os.path.join(PROCESSED_FOLDER, job_id)
+        raise HTTPException(status_code=400, detail="Invalid file request")
 
-    return send_from_directory(file_path, filename, as_attachment=True)
+    file_path = os.path.join(PROCESSED_FOLDER, job_id, "htdemucs", "input", filename)
+    if not os.path.exists(file_path):
+        file_path = os.path.join(PROCESSED_FOLDER, job_id, filename)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(file_path, filename=filename)
 
 
-@app.route("/api/mix", methods=["POST"])
-def mix_audio():
-    job_id = request.form.get("job_id")
-    vocal_volume = request.form.get("vocal_volume", "1.0")
-    music_volume = request.form.get("music_volume", "1.0")
-
-    if not job_id or "user_voice" not in request.files:
-        return jsonify({"error": "Missing job_id or voice recording file"}), 400
-
+@app.post("/api/mix")
+async def mix_audio(
+    job_id: str = Form(...),
+    vocal_volume: str = Form("1.0"),
+    music_volume: str = Form("1.0"),
+    user_voice: UploadFile = File(...),
+):
+    """Mix recorded user voice with separated backing track."""
     job_dir = os.path.join(PROCESSED_FOLDER, job_id)
     karaoke_path = os.path.join(job_dir, "htdemucs", "input", "no_vocals.mp3")
 
     if not os.path.exists(karaoke_path):
-        return jsonify({"error": "Karaoke track not found for job"}), 404
+        raise HTTPException(status_code=404, detail="Karaoke track not found for job")
 
-    voice_file = request.files["user_voice"]
     voice_path = os.path.join(job_dir, "user_recording.webm")
-    voice_file.save(voice_path)
+    voice_content = await user_voice.read()
+    with open(voice_path, "wb") as f:
+        f.write(voice_content)
 
     output_mixed_path = os.path.join(job_dir, "final_song.mp3")
 
-    # Use ffmpeg to mix microphone recording with backing track
     ffmpeg_cmd = [
         "ffmpeg", "-y",
         "-i", karaoke_path,
@@ -458,56 +486,51 @@ def mix_audio():
     ]
 
     try:
-        subprocess.run(ffmpeg_cmd, capture_output=True, text=True, check=True)
-        return jsonify({
+        await asyncio.to_thread(subprocess.run, ffmpeg_cmd, capture_output=True, text=True, check=True)
+        return {
             "success": True,
             "mixed_url": f"/api/download/{job_id}/final_song.mp3",
             "message": "Recorded voice & karaoke mixed successfully!"
-        })
+        }
     except subprocess.CalledProcessError as e:
-        print("FFmpeg mixing error:", e.stderr)
-        return jsonify({"error": "Audio mixing failed", "details": e.stderr}), 500
+        raise HTTPException(status_code=500, detail={"error": "Audio mixing failed", "details": e.stderr})
 
 
-@app.route("/api/ai-cover", methods=["POST"])
-def generate_ai_cover():
-    """
-    Zero-Shot Singing Voice Conversion using Seed-VC:
-    Automatically runs on Google Colab GPU (~15s) when paired via Colab MCP,
-    or falls back to local CPU inference.
-    """
-    job_id = request.form.get("job_id")
-    song_filename = request.form.get("song_filename")
-    voice_filename = request.form.get("voice_filename")
-    pitch_shift = int(request.form.get("pitch_shift", "0"))
-    diffusion_steps = int(request.form.get("diffusion_steps", "10"))
-    vocal_volume = request.form.get("vocal_volume", "1.3")
-    music_volume = request.form.get("music_volume", "1.0")
-    use_colab_param = request.form.get("use_colab")
-
+@app.post("/api/ai-cover")
+async def generate_ai_cover(
+    job_id: Optional[str] = Form(None),
+    song_filename: Optional[str] = Form(None),
+    voice_filename: Optional[str] = Form(None),
+    pitch_shift: int = Form(0),
+    diffusion_steps: int = Form(10),
+    vocal_volume: str = Form("1.3"),
+    music_volume: str = Form("1.0"),
+    use_colab: Optional[str] = Form(None),
+    user_voice: Optional[UploadFile] = File(None),
+):
+    """Zero-Shot Singing Voice Conversion using Seed-VC on Google Colab GPU or local CPU."""
     should_use_colab = (
-        (use_colab_param.lower() == "true")
-        if use_colab_param is not None
+        (use_colab.lower() == "true")
+        if use_colab is not None
         else (internal_colab_client.status == "connected")
     )
 
-    # If song_filename from .ignored/songs was provided without job_id, extract or reuse existing job_id
     if not job_id and song_filename:
         safe_song = os.path.basename(song_filename)
         song_path = os.path.join(SONGS_FOLDER, safe_song)
         if not os.path.exists(song_path):
-            return jsonify({"error": f"Song '{safe_song}' not found in .ignored/songs"}), 404
+            raise HTTPException(status_code=404, detail=f"Song '{safe_song}' not found in .ignored/songs")
         job_id = find_existing_job_for_song(safe_song)
         if not job_id:
             try:
-                job_id = separate_song_file(song_path, safe_song, use_colab=should_use_colab)
+                job_id = await separate_song_file(song_path, safe_song, use_colab=should_use_colab)
             except subprocess.CalledProcessError as e:
-                return jsonify({"error": "Demucs separation failed", "details": e.stderr}), 500
+                raise HTTPException(status_code=500, detail={"error": "Demucs separation failed", "details": e.stderr})
             except Exception as e:
-                return jsonify({"error": f"Separation failed: {e}"}), 500
+                raise HTTPException(status_code=500, detail=f"Separation failed: {e}")
 
     if not job_id:
-        return jsonify({"error": "Missing job_id or song_filename"}), 400
+        raise HTTPException(status_code=400, detail="Missing job_id or song_filename")
 
     job_dir = os.path.join(PROCESSED_FOLDER, job_id)
     separated_dir = os.path.join(job_dir, "htdemucs", "input")
@@ -515,16 +538,17 @@ def generate_ai_cover():
     vocals_path = os.path.join(separated_dir, "vocals.mp3")
 
     if not os.path.exists(karaoke_path) or not os.path.exists(vocals_path):
-        return jsonify({"error": "Separated vocals or instrumental track not found for this song"}), 404
+        raise HTTPException(status_code=404, detail="Separated vocals or instrumental track not found for this song")
 
     ref_wav_path = os.path.join(job_dir, "user_voice_ref.wav")
 
-    # Determine voice source: uploaded/recorded file OR saved file in .ignored/vsp_voice/
-    if "user_voice" in request.files and request.files["user_voice"].filename != "":
-        voice_file = request.files["user_voice"]
-        raw_ext = os.path.splitext(voice_file.filename or "sample.webm")[1] or ".webm"
+    # Determine voice source
+    if user_voice and user_voice.filename:
+        raw_ext = os.path.splitext(user_voice.filename)[1] or ".webm"
         raw_voice_path = os.path.join(job_dir, f"user_voice_raw{raw_ext}")
-        voice_file.save(raw_voice_path)
+        content = await user_voice.read()
+        with open(raw_voice_path, "wb") as f:
+            f.write(content)
     else:
         if not voice_filename and os.path.exists(VOICE_FOLDER):
             available = [
@@ -535,24 +559,28 @@ def generate_ai_cover():
                 voice_filename = available[0]
 
         if not voice_filename:
-            return jsonify({"error": "No voice sample provided or found in .ignored/vsp_voice"}), 400
+            raise HTTPException(status_code=400, detail="No voice sample provided or found in .ignored/vsp_voice")
 
         raw_voice_path = os.path.join(VOICE_FOLDER, os.path.basename(voice_filename))
         if not os.path.exists(raw_voice_path):
-            return jsonify({"error": f"Voice file '{voice_filename}' not found in .ignored/vsp_voice"}), 404
+            raise HTTPException(status_code=404, detail=f"Voice file '{voice_filename}' not found in .ignored/vsp_voice")
 
     try:
-        subprocess.run([
-            "ffmpeg", "-y",
-            "-i", raw_voice_path,
-            "-vn",
-            "-t", "25",
-            "-ac", "1",
-            "-ar", "44100",
-            ref_wav_path
-        ], capture_output=True, text=True, check=True)
+        await asyncio.to_thread(
+            subprocess.run,
+            [
+                "ffmpeg", "-y",
+                "-i", raw_voice_path,
+                "-vn",
+                "-t", "25",
+                "-ac", "1",
+                "-ar", "44100",
+                ref_wav_path
+            ],
+            capture_output=True, text=True, check=True
+        )
     except subprocess.CalledProcessError as e:
-        return jsonify({"error": "Failed to convert voice sample to WAV", "details": e.stderr}), 500
+        raise HTTPException(status_code=500, detail={"error": "Failed to convert voice sample to WAV", "details": e.stderr})
 
     ai_vocals_mp3_path = os.path.join(job_dir, "ai_vocals.mp3")
     ai_cover_mp3_path = os.path.join(job_dir, "ai_cover_song.mp3")
@@ -560,27 +588,24 @@ def generate_ai_cover():
 
     if should_use_colab and internal_colab_client.status == "connected":
         try:
-            internal_colab_client.run_sync(
-                internal_colab_client.run_seed_vc_on_colab(
-                    vocals_path=vocals_path,
-                    target_voice_path=ref_wav_path,
-                    out_ai_vocals_mp3_path=ai_vocals_mp3_path,
-                    diffusion_steps=max(diffusion_steps, 25),
-                    pitch_shift=pitch_shift,
-                    f0_condition=True,
-                    auto_f0_adjust=True,
-                )
+            await internal_colab_client.run_seed_vc_on_colab(
+                vocals_path=vocals_path,
+                target_voice_path=ref_wav_path,
+                out_ai_vocals_mp3_path=ai_vocals_mp3_path,
+                diffusion_steps=max(diffusion_steps, 25),
+                pitch_shift=pitch_shift,
+                f0_condition=True,
+                auto_f0_adjust=True,
             )
             used_engine = f"Google Colab GPU ({internal_colab_client.gpu_info or 'CUDA'})"
             vocals_to_mix = ai_vocals_mp3_path
         except Exception as e:
-            print("Colab Seed-VC Error:", e)
-            return jsonify({"error": f"Google Colab GPU conversion failed: {e}"}), 500
+            raise HTTPException(status_code=500, detail=f"Google Colab GPU conversion failed: {e}")
     else:
         try:
             ensure_seed_vc_ready()
         except subprocess.CalledProcessError as e:
-            return jsonify({"error": "Failed to initialize Seed-VC repository", "details": e.stderr}), 500
+            raise HTTPException(status_code=500, detail={"error": "Failed to initialize Seed-VC repository", "details": e.stderr})
 
         vc_out_dir = os.path.join(job_dir, "seed_vc_out")
         if os.path.exists(vc_out_dir):
@@ -602,13 +627,9 @@ def generate_ai_cover():
         ]
 
         try:
-            subprocess.run(seed_vc_cmd, cwd=SEED_VC_DIR, capture_output=True, text=True, check=True)
+            await asyncio.to_thread(subprocess.run, seed_vc_cmd, cwd=SEED_VC_DIR, capture_output=True, text=True, check=True)
         except subprocess.CalledProcessError as e:
-            print("Seed-VC Error Output:", e.stderr)
-            return jsonify({
-                "error": "Seed-VC AI voice conversion failed",
-                "details": e.stderr or e.stdout
-            }), 500
+            raise HTTPException(status_code=500, detail={"error": "Seed-VC AI voice conversion failed", "details": e.stderr or e.stdout})
 
         generated_wavs = [
             os.path.join(vc_out_dir, f)
@@ -616,30 +637,38 @@ def generate_ai_cover():
             if f.endswith(".wav")
         ]
         if not generated_wavs:
-            return jsonify({"error": "Seed-VC did not produce a converted vocal track"}), 500
+            raise HTTPException(status_code=500, detail="Seed-VC did not produce a converted vocal track")
 
         converted_wav_path = generated_wavs[0]
-        subprocess.run([
-            "ffmpeg", "-y",
-            "-i", converted_wav_path,
-            "-b:a", "192k",
-            ai_vocals_mp3_path
-        ], capture_output=True, text=True, check=True)
+        await asyncio.to_thread(
+            subprocess.run,
+            [
+                "ffmpeg", "-y",
+                "-i", converted_wav_path,
+                "-b:a", "192k",
+                ai_vocals_mp3_path
+            ],
+            capture_output=True, text=True, check=True
+        )
         vocals_to_mix = converted_wav_path
 
     try:
-        subprocess.run([
-            "ffmpeg", "-y",
-            "-i", karaoke_path,
-            "-i", vocals_to_mix,
-            "-filter_complex",
-            f"[0:a]volume={music_volume}[a0];[1:a]volume={vocal_volume}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=2:normalize=0,alimiter=limit=0.97[out]",
-            "-map", "[out]",
-            "-b:a", "192k",
-            ai_cover_mp3_path
-        ], capture_output=True, text=True, check=True)
+        await asyncio.to_thread(
+            subprocess.run,
+            [
+                "ffmpeg", "-y",
+                "-i", karaoke_path,
+                "-i", vocals_to_mix,
+                "-filter_complex",
+                f"[0:a]volume={music_volume}[a0];[1:a]volume={vocal_volume}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=2:normalize=0,alimiter=limit=0.97[out]",
+                "-map", "[out]",
+                "-b:a", "192k",
+                ai_cover_mp3_path
+            ],
+            capture_output=True, text=True, check=True
+        )
 
-        return jsonify({
+        return {
             "success": True,
             "job_id": job_id,
             "engine": used_engine,
@@ -648,15 +677,21 @@ def generate_ai_cover():
             "ai_cover_url": f"/api/download/{job_id}/ai_cover_song.mp3",
             "ai_vocals_url": f"/api/download/{job_id}/ai_vocals.mp3",
             "message": f"AI Voice Clone Song Cover generated via {used_engine}!"
-        })
+        }
     except subprocess.CalledProcessError as e:
-        print("FFmpeg AI cover mixing error:", e.stderr)
-        return jsonify({"error": "Failed to mix AI vocals with instrumental", "details": e.stderr}), 500
+        raise HTTPException(status_code=500, detail={"error": "Failed to mix AI vocals with instrumental", "details": e.stderr})
+
+
+# --- Static UI Delivery ---
+
+@app.get("/")
+async def root():
+    return FileResponse(os.path.join(STATIC_FOLDER, "index.html"))
+
+# Mount static directory for any static assets
+app.mount("/static", StaticFiles(directory=STATIC_FOLDER), name="static")
+
 
 if __name__ == "__main__":
-    try:
-        ensure_seed_vc_ready()
-    except Exception as e:
-        print("Warning initializing Seed-VC:", e)
     port = int(os.environ.get("BACKEND_PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)
