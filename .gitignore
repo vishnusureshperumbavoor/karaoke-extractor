@@ -1,4 +1,5 @@
 .ignored/
+exports/
 venv/
 *.pyc
 __pycache__/
